@@ -143,15 +143,7 @@ Pagina trebuie să primească de la un nivel abstract următoarele informații:
 
 Implementarea inițială din `graphic_ui` va utiliza un STUB pentru baterie.
 
-Stub-ul trebuie să permită simularea cel puțin a următoarelor stări:
 
-- baterie LOW;
-- baterie MEDIUM;
-- baterie GOOD;
-- CHARGING.
-
-Ulterior, stub-ul va fi înlocuit cu implementarea reală pentru hardware,
-fără modificarea paginii Battery Check.
 
 ---
 
