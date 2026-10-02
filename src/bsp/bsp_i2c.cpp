@@ -12,18 +12,19 @@ void bsp_i2c_write(uint8_t device_addr, uint8_t *buffer, size_t len)
 }
 
 
-void bsp_i2c_write_reg8(uint8_t device_addr, uint8_t reg_addr, uint8_t *buffer, size_t len)
+int bsp_i2c_write_reg8(uint8_t device_addr, uint8_t reg_addr, uint8_t *buffer, size_t len)
 {
     uint8_t write_buffer[len + 1];
     write_buffer[0] = reg_addr;
     memcpy(write_buffer + 1, buffer, len);
-    i2c_write_blocking(BSP_I2C_NUM, device_addr, write_buffer, len + 1, false);
+    return i2c_write_blocking(BSP_I2C_NUM, device_addr, write_buffer, len + 1, false);
 }
 
-void bsp_i2c_read_reg8(uint8_t device_addr, uint8_t reg_addr, uint8_t *buffer, size_t len)
+int bsp_i2c_read_reg8(uint8_t device_addr, uint8_t reg_addr, uint8_t *buffer, size_t len)
 {
-    i2c_write_blocking(BSP_I2C_NUM, device_addr, &reg_addr, 1, true);
-    i2c_read_blocking(BSP_I2C_NUM, device_addr, buffer, len, false);
+    int wr = i2c_write_blocking(BSP_I2C_NUM, device_addr, &reg_addr, 1, true);
+    if (wr < 0) return wr;
+    return i2c_read_blocking(BSP_I2C_NUM, device_addr, buffer, len, false);
 }
 
 void bsp_i2c_write_reg16(uint8_t device_addr, uint16_t reg_addr, uint8_t *buffer, size_t len)

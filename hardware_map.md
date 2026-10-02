@@ -220,6 +220,26 @@ Status: **NOT TESTED**
 - [ ] RX = TBD
 - [ ] Baud rate = TBD
 
+## 2.7 Monitor curent — INA219
+
+Bus:
+
+`I2C1`
+
+Adresă I2C:
+
+`0x40` (A0=A1=GND)
+
+Status: **NOT TESTED**
+
+- [ ] INA219_SDA = GP6 (magistrală comună cu touch CST328 și IMU QMI8658)
+- [ ] INA219_SCL = GP7
+
+Driver: [src/bsp/bsp_ina219.h](src/bsp/bsp_ina219.h) / [src/bsp/bsp_ina219.cpp](src/bsp/bsp_ina219.cpp)
+
+Calibrare curentă (vezi bsp_ina219.h): shunt 0.1 ohm (R100), domeniu bus 32 V,
+curent +/-3.2 A cu rezoluție 100 uA/LSB.
+
 ---
 
 # 3. Shared / Bus Relationships
@@ -247,9 +267,9 @@ Status:
 
 ---
 
-## 3.2 Waveshare Touch + IMU
+## 3.2 Waveshare Touch + IMU + INA219
 
-Touch and IMU share the same I2C bus.
+Touch, IMU și INA219 împart aceeași magistrală I2C.
 
 ### I2C1 signals
 
@@ -266,11 +286,17 @@ Touch and IMU share the same I2C bus.
 - INT1 = GP23
 - INT2 = GP24
 
+### INA219
+
+- Adresă = 0x40
+
 Status:
 
 - [x] Touch tested
 - [ ] IMU tested
+- [ ] INA219 tested
 - [ ] Touch + IMU simultaneous operation tested
+- [ ] Touch + INA219 simultaneous operation tested
 
 ---
 
@@ -285,6 +311,7 @@ Status:
 - [ ] Charging detection
 - [ ] RS485
 - [ ] IMU
+- [ ] INA219 (monitor curent, I2C 0x40)
 - [x] LCD + Touch
 - [ ] LCD + SD
 - [ ] LCD + Touch + SD

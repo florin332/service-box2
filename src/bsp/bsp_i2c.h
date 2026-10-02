@@ -11,13 +11,14 @@
 
 void bsp_i2c_write(uint8_t device_addr, uint8_t *buffer, size_t len);
 
-void bsp_i2c_write_reg8(
+// Returneaza numarul de bytes scrisi/cititi sau PICO_ERROR_GENERIC la NAK.
+int bsp_i2c_write_reg8(
     uint8_t device_addr,
     uint8_t reg_addr,
     uint8_t *buffer,
     size_t len);
 
-void bsp_i2c_read_reg8(
+int bsp_i2c_read_reg8(
     uint8_t device_addr,
     uint8_t reg_addr,
     uint8_t *buffer,

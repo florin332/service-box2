@@ -41,6 +41,7 @@
 
 #include "bsp/bsp_i2c.h"
 #include "bsp/bsp_cst328.h"
+#include "bsp/bsp_ina219.h"
 
 // Forward declarations
 bool readRawPoint(int32_t &rx, int32_t &ry);
@@ -917,7 +918,26 @@ bool refreshPageNeeded = true;
 // ============================================================================
 void setup() {
     Serial.begin(115200);
-    delay(500);
+
+    // Intarziere de pornire: permite deschiderea monitorului serial
+    // (dupa upload cu picotool placa se re-enumerueaza si output-ul
+    // de boot se pierde daca monitorul nu e inca atasat).
+    for (int i = 15; i > 0; i--)
+    {
+        Serial.print("Pornire in ");
+        Serial.print(i);
+        Serial.println(" s...");
+        Serial.flush();
+        delay(1000);
+    }
+
+    // Banner de boot AFISAT CAT MAI DEVREME - daca nu apare deloc,
+    // problema este la conexiunea seriala (port/baud), nu la cod.
+    Serial.println();
+    Serial.println("==============================================");
+    Serial.println("Service Box - graphic_ui / WAVESHARE RP2350");
+    Serial.println("==============================================");
+    Serial.flush();
 
 #if defined(SERVICEBOX_WAVESHARE)
 
@@ -948,17 +968,18 @@ void setup() {
     display.setRotation(0);
 
     // Initializare touch CST328 (I2C1: SDA=GP6, SCL=GP7, 400 kHz)
+    Serial.println("BOOT: init I2C1...");
+    Serial.flush();
     bsp_i2c_init();
 
     cst328_info.width = LCD_WIDTH;
     cst328_info.height = LCD_HEIGHT;
     cst328_info.rotation = 0;
 
+    Serial.println("BOOT: init CST328 (touch)...");
+    Serial.flush();
     bsp_cst328_init(&cst328_info);
 
-    Serial.println();
-    Serial.println("==============================================");
-    Serial.println("Service Box - graphic_ui / WAVESHARE RP2350");
     Serial.print("Calibrare: stage=");
     Serial.print(calib.stage);
     Serial.print(" swapXY=");
@@ -967,7 +988,27 @@ void setup() {
     Serial.print(calib.invX);
     Serial.print(" invY=");
     Serial.println(calib.invY);
-    Serial.println("==============================================");
+
+    // Initializare INA219 (I2C1, adresa 0x40) - monitor curent/tensiune
+    Serial.println("BOOT: init INA219 (0x40)...");
+    Serial.flush();
+    if (bsp_ina219_init())
+    {
+        ina219_data_t ina219_data;
+        bsp_ina219_read(&ina219_data);
+        Serial.print("INA219: Vbus=");
+        Serial.print(ina219_data.bus_voltage_V, 3);
+        Serial.print(" V, I=");
+        Serial.print(ina219_data.current_mA, 1);
+        Serial.print(" mA, P=");
+        Serial.print(ina219_data.power_mW, 1);
+        Serial.println(" mW");
+    }
+    else
+    {
+        Serial.println("INA219: absent (0x40 fara raspuns)");
+    }
+    Serial.flush();
 
     // Afisare pagina conform stadiului de calibrare
     if (calib.stage == 1)
