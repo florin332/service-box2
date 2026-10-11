@@ -2,8 +2,9 @@
 #define BATTERY_CHECK_SCREEN_H
 
 #include <Arduino.h>
-#include <Adafruit_GFX.h>
 #include "battery/IBatteryProvider.h"
+#include "graphic/BatteryCheckView.h"
+#include "graphic/UiTheme.h"
 
 // ============================================================================
 // Pagină UI "Battery Check".
@@ -30,71 +31,30 @@
 
 class BatteryCheckScreen {
 public:
-    // Stare calitativă a nivelului bateriei. Este scoped în clasă cu prefix
-    // pentru a evita coliziuni cu alte enum-uri LOW/MEDIUM/GOOD din UI.
-    enum class BatteryLevelState {
-        BAT_LOW,
-        BAT_MEDIUM,
-        BAT_GOOD
-    };
-
     BatteryCheckScreen(Adafruit_GFX* tft, IBatteryProvider& battery);
 
     void init();
     void render(bool forceRedraw = false);
 
-    // Procesează inputul tactil și temporizarea.
-    // Returnează true când pagina a fost reactivată (pentru diagnostic).
-    bool update(int touchX, int touchY, bool isTouched);
+    // Acces la view (folosit de PageNavigator pentru standby/clipit).
+    BatteryCheckView& view() { return _view; }
 
-    // Returnează true dacă condițiile pentru avansare automată către START
-    // sunt îndeplinite (MEDIUM/GOOD după timeout).
-    bool shouldAdvance() const;
+    // Construieste modelul de vizualizare din starea curenta a bateriei
+    // (public: il foloseste PageNavigator la redesenarile din standby).
+    void fillModel(BatteryCheckViewModel& m) const;
 
 private:
-    Adafruit_GFX* _tft;
+    BatteryCheckView _view; // renderer pasiv (deseneaza ce primeste)
     IBatteryProvider& _battery;
 
     bool _isRendered;
-    bool _screenOn;
-    bool _advancePending;
 
-    unsigned long _lastActivityMs;
     unsigned long _lastBatteryUpdateMs;
-    unsigned long _standbyBlinkTimerMs;
-    bool _standbyBlinkOn;
-    bool _standbyIndicatorVisible;
 
     uint8_t  _displayedLevel;
     bool     _displayedCharging;
 
-    // Constante vizuale și de timing
-    static constexpr uint8_t  LOW_THRESHOLD_PERCENT    = 20;
-    static constexpr uint8_t  MEDIUM_THRESHOLD_PERCENT = 60;
-    static constexpr unsigned long SCREEN_ON_TIMEOUT_MS = 5000UL;
-    static constexpr unsigned long BATTERY_UPDATE_MS    = 1500UL;
-
-    // Standby blink: 2 secunde stins, 1 secundă aprins
-    static constexpr unsigned long STANDBY_BLINK_OFF_MS = 2000UL;
-    static constexpr unsigned long STANDBY_BLINK_ON_MS  = 1000UL;
-
-    static constexpr uint16_t COLOR_BACKGROUND = 0x0000; // Black
-    static constexpr uint16_t COLOR_TEXT_MAIN  = 0xFFFF; // White
-    static constexpr uint16_t COLOR_TEXT_MUTED = 0x9DF3; // Gray
-    static constexpr uint16_t COLOR_RED        = 0xF800; // Red
-    static constexpr uint16_t COLOR_YELLOW     = 0xFFE0; // Yellow
-    static constexpr uint16_t COLOR_GREEN      = 0x07E0; // Green
-
-    static constexpr int INDICATOR_RADIUS = 8;
-
-    void drawMainContent();
-    void drawIndicator();
-    void drawStandbyContent();      // indicator clipitor + procent permanent
-    bool updateStandbyBlinkPhase(); // true când s-a schimbat faza de clipit
-    void clearScreenKeepIndicator();
-
-    BatteryLevelState evaluateLevel(uint8_t percent) const;
-    uint16_t levelStateToColor(BatteryLevelState state) const;
+    static constexpr unsigned long BATTERY_UPDATE_MS = 1500UL;
 };
 
 #endif // BATTERY_CHECK_SCREEN_H

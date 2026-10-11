@@ -130,6 +130,7 @@ void bsp_cst328_set_rotation(uint16_t rotation)
 // 外部中断服务例程
 void gpio_isr_handler(uint gpio, uint32_t events)
 {
+    (void)events; // masca de evenimente nu e folosita - doar flag de citire
     if (gpio == BSP_CST328_INT_PIN)
     {
         // 这里可以处理按键按下事件

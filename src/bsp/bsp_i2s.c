@@ -54,7 +54,7 @@ void bsp_i2s_init(void)
     uint32_t freqDiv = clock_get_hz(clk_sys) * 4 / BSP_I2S_FREQ;
     pio_sm_set_clkdiv_int_frac(BSP_I2S_SOUND_PIO, i2sSoundSm, freqDiv >> 8, freqDiv & 0xFF);
 
-    printf("I2S sound freq: %d, divider: %d\n", BSP_I2S_FREQ, freqDiv);
+    printf("I2S sound freq: %d, divider: %lu\n", BSP_I2S_FREQ, (unsigned long)freqDiv);
     pio_sm_set_enabled(BSP_I2S_SOUND_PIO, i2sSoundSm, true);
 
     // DMA

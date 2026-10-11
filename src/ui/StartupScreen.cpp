@@ -1,11 +1,11 @@
 #include "StartupScreen.h"
 
-// Paleta de culori este definită exclusiv ca constante constexpr în clasă
-// (StartupScreen.h). Nu există macro-uri duplicate care ar putea produce
-// conflicte de preprocessor la reordonarea codului.
+// Desenarea este delegata catre StartupView (renderer pasiv, layout relativ).
+// Gating-ul START si pragurile de nivel sunt in NavigationPolicy; aici ramane
+// doar interactiunea tactila cu butonul si anti-flicker-ul.
 
 StartupScreen::StartupScreen(Adafruit_GFX* tftInstance, IBatteryProvider& battery)
-    : _tft(tftInstance)
+    : _view(tftInstance)
     , _battery(battery)
     , _isRendered(false)
     , _buttonPressed(false)
@@ -27,50 +27,26 @@ void StartupScreen::init() {
 void StartupScreen::render(bool forceRedraw) {
     if (_isRendered && !forceRedraw) return;
 
-    _tft->fillScreen(COLOR_BACKGROUND);
+    StartupViewModel m;
+    m.batteryVoltageV = _battery.getVoltageV();
+    m.batteryColor    = NavigationPolicy::indicatorColor(
+                            _battery.getLevelPercent(), _battery.isCharging());
+    m.buttonText = NavigationPolicy::startButtonText(_battery.getState());
+    m.sdFreeMB     = 0;
+    m.sdTotalMB    = 0;
+    m.sdAvailable  = false;
 
-    // Title Blocks (Manually centered on 240px width screen)
-    _tft->setTextColor(COLOR_TEXT_MAIN);
-    _tft->setTextSize(3);
-    _tft->setCursor(25, 45);
-    _tft->print("SERVICE BOX");
+    _view.renderFull(m);
 
-    _tft->setTextSize(2);
-    _tft->setCursor(16, 95);
-    _tft->print("PANOURI ASCENSOARE");
-
-    // Version Tag
-    _tft->setTextColor(COLOR_TEXT_MUTED);
-    _tft->setTextSize(1);
-    _tft->setCursor(102, 135);
-    _tft->print("v1.0.0");
-
-    // Base Interactive Button Render
-    drawButton(false);
-
-    // Battery indicator (above SD status, same style as BatteryCheckScreen)
-    drawBatteryInfo();
-
-    // Default Storage Row (Will override on runtime update calls)
-    updateStorageInfo(0, 0, false);
-
+    _displayedLevel      = _battery.getLevelPercent();
+    _displayedCharging   = _battery.isCharging();
+    _displayedButtonText = m.buttonText;
     _isRendered = true;
 }
 
-void StartupScreen::drawButton(bool pressed) {
-    (void)pressed; // Nu mai există feedback vizual de culoare la apăsare.
-
-    // Determină textul curent în funcție de starea bateriei.
-    BatteryState state = _battery.getState();
-    const char* btnText = (state == BatteryState::LOW || state == BatteryState::CRITICAL)
-                          ? "BATT LOW"
-                          : "START";
-
-    // textSize=2 => 12 px lățime/literă, 16 px înălțime
-    int16_t textWidth = strlen(btnText) * 12;
-    int16_t textHeight = 16;
-    int16_t cursorX = BTN_X + (BTN_W - textWidth) / 2;
-    int16_t cursorY = BTN_Y + 15;
+void StartupScreen::drawButton() {
+    // Textul butonului vine din politica de navigatie (START / BATT LOW).
+    const char* btnText = NavigationPolicy::startButtonText(_battery.getState());
 
     // Evită redesenarea continuă: redesenează DOAR dacă textul s-a schimbat.
     // Starea "pressed" nu are feedback vizual, deci nu trebuie să declanșeze
@@ -81,75 +57,25 @@ void StartupScreen::drawButton(bool pressed) {
     }
     _displayedButtonText = btnText;
 
-    // Draw Round Box outline filled canvas
-    _tft->fillRoundRect(BTN_X, BTN_Y, BTN_W, BTN_H, BTN_RADIUS, COLOR_BTN_BASE);
-    _tft->drawRoundRect(BTN_X, BTN_Y, BTN_W, BTN_H, BTN_RADIUS, COLOR_TEXT_MAIN);
-
-    // Curăță zona de text cu culoarea butonului pentru a evita artefacte
-    // la schimbarea dintre START / BATT LOW.
-    _tft->fillRect(cursorX - 2, cursorY - 2, textWidth + 4, textHeight + 4, COLOR_BTN_BASE);
-
-    _tft->setTextColor(COLOR_TEXT_MUTED);
-    _tft->setTextSize(2);
-    _tft->setCursor(cursorX, cursorY);
-    _tft->print(btnText);
+    _view.drawButton(btnText);
 }
 
 void StartupScreen::drawBatteryInfo() {
     uint8_t level = _battery.getLevelPercent();
-    float voltage = _battery.getVoltageV();
     bool charging = _battery.isCharging();
 
-    // Clear battery display area (between button and SD status, left aligned with SD)
-    _tft->fillRect(10, 266, 220, 20, COLOR_BACKGROUND);
+    StartupViewModel m;
+    m.batteryVoltageV = _battery.getVoltageV();
+    m.batteryColor    = NavigationPolicy::indicatorColor(level, charging);
 
-    // Colored indicator dot (same style as SD indicator)
-    uint16_t color = levelToColor(level);
-    if (level == 100 && charging) {
-        color = COLOR_GREEN;
-    }
-    _tft->fillCircle(20, 274, BATTERY_DOT_RADIUS, color);
-
-    // Text aligned with SD status, textSize 1, fixed muted color
-    char batStr[32];
-    snprintf(batStr, sizeof(batStr), "BATTERY: %.2f V", voltage);
-    _tft->setTextSize(1);
-    _tft->setTextColor(COLOR_TEXT_MUTED);
-    _tft->setCursor(32, 271);
-    _tft->print(batStr);
+    _view.drawBatteryInfo(m);
 
     _displayedLevel = level;
     _displayedCharging = charging;
 }
 
-uint16_t StartupScreen::levelToColor(uint8_t percent) const {
-    if (percent < LOW_THRESHOLD_PERCENT) {
-        return COLOR_RED;
-    }
-    if (percent < MEDIUM_THRESHOLD_PERCENT) {
-        return COLOR_YELLOW;
-    }
-    return COLOR_GREEN;
-}
-
 void StartupScreen::updateStorageInfo(uint32_t freeMB, uint32_t totalMB, bool cardAvailable) {
-    // Overwrite bottom line canvas chunk to avoid flicker artifacts
-    _tft->fillRect(10, 282, 220, 20, COLOR_BACKGROUND);
-    _tft->setTextSize(1);
-
-    if (cardAvailable) {
-        // SD Status Indicator Bullet (Green dot)
-        _tft->fillCircle(20, 290, 4, COLOR_GREEN);
-        _tft->setTextColor(COLOR_TEXT_MUTED);
-        _tft->setCursor(32, 287);
-        _tft->print("SD: " + String(freeMB) + " MB / " + String((float)totalMB / 1000.0, 1) + " GB FREE");
-    } else {
-        // SD Disconnected Bullet (Red dot)
-        _tft->fillCircle(20, 290, 4, COLOR_RED);
-        _tft->setTextColor(COLOR_TEXT_MUTED);
-        _tft->setCursor(32, 287);
-        _tft->print("SD CARD DISCONNECTED / ERROR");
-    }
+    _view.updateStorage(freeMB, totalMB, cardAvailable);
 }
 
 bool StartupScreen::update(int touchX, int touchY, bool isTouched) {
@@ -168,8 +94,10 @@ bool StartupScreen::update(int touchX, int touchY, bool isTouched) {
 
     if (isTouched) {
         // Evaluate boundary box intersection parameters
-        if (touchX >= BTN_X && touchX <= (BTN_X + BTN_W) &&
-            touchY >= BTN_Y && touchY <= (BTN_Y + BTN_H)) {
+        // (geometria butonului vine din view, calculata din layout)
+        const UiRect& btn = _view.buttonRect();
+        if (touchX >= btn.x && touchX <= (btn.x + btn.w) &&
+            touchY >= btn.y && touchY <= (btn.y + btn.h)) {
 
             // Fără redesenare la apăsare: nu există feedback vizual de culoare,
             // redesenarea era sursa flicker-ului.
@@ -183,11 +111,10 @@ bool StartupScreen::update(int touchX, int touchY, bool isTouched) {
         if (_buttonPressed) {
             _buttonPressed = false;
 
-            // Aplicare politică baterie: LOW/CRITICAL blochează inițierea unui test nou.
-            BatteryState state = _battery.getState();
-            if (state == BatteryState::LOW || state == BatteryState::CRITICAL) {
-                Serial.print("[StartupScreen] START blocked: battery state is ");
-                Serial.println(state == BatteryState::LOW ? "LOW" : "CRITICAL");
+            // Aplicare politică baterie (NavigationPolicy): LOW/CRITICAL
+            // blochează inițierea unui test nou.
+            if (!NavigationPolicy::startAllowed(_battery.getState())) {
+                Serial.println("[StartupScreen] START blocked: battery LOW/CRITICAL");
                 startTriggered = false;
             } else {
                 startTriggered = true; // Dispatch execution signal on confirmation release
@@ -197,7 +124,7 @@ bool StartupScreen::update(int touchX, int touchY, bool isTouched) {
 
     // Asigură sincronizarea stării vizuale chiar dacă textul nu s-a schimbat
     // (de ex. la prima afișare sau după init).
-    drawButton(false);
+    drawButton();
 
     return startTriggered;
 }

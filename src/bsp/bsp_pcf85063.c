@@ -50,7 +50,7 @@ void bsp_pcf85063_get_time(struct tm *now_tm)
 void bsp_pcf85063_set_time(struct tm *now_tm)
 {
     uint8_t time_data[7];
-    time_t now_time = mktime(now_tm);
+    (void)mktime(now_tm); // normalizare campuri tm (wday/yday), rezultatul nu e folosit
 
     time_data[0] = dec2bcd(now_tm->tm_sec) & 0x7F;
     time_data[1] = dec2bcd(now_tm->tm_min) & 0x7F;

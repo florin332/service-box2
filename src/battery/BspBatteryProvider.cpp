@@ -189,7 +189,7 @@ uint8_t BspBatteryProvider::voltageToPercent(float v) const
 // ----------------------------------------------------------------------------
 void BspBatteryProvider::loadSimState()
 {
-    SimState s;
+    SimState s{};  // zero-init: magic/version valide doar daca EEPROM le-a suprascris
     EEPROM.get(SIM_EEPROM_OFFSET, s);
 
     if (s.magic != SIM_MAGIC || s.version != SIM_VERSION) {
