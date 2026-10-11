@@ -23,7 +23,7 @@ static void bubble_sort(uint16_t *data, uint16_t size)
 
 static uint16_t average_filter(uint16_t *samples)
 {
-    uint16_t out;
+    uint16_t out = 0;
     bubble_sort(samples, BATTERY_ADC_SIZE);
     for (int i = 1; i < BATTERY_ADC_SIZE - 1; i++)
     {
@@ -71,6 +71,7 @@ void bsp_battery_init(uint16_t key_wait_ms)
     gpio_set_dir(BSP_BAT_EN_PIN, GPIO_OUT);
     gpio_init(BSP_BAT_KEY_PIN);
     gpio_set_dir(BSP_BAT_KEY_PIN, GPIO_IN);
+    gpio_pull_up(BSP_BAT_KEY_PIN);
 
     bsp_battery_enabled(false);
     sleep_ms(key_wait_ms);

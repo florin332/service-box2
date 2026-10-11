@@ -107,8 +107,8 @@ bool BatteryCheckScreen::update(int touchX, int touchY, bool isTouched)
     if (_screenOn && (now - _lastActivityMs >= SCREEN_ON_TIMEOUT_MS)) {
         BatteryState state = _battery.getState();
 
-        if (state == BatteryState::NORMAL) {
-            // Nivel suficient: avansare automată către START.
+        if (state == BatteryState::NORMAL || state == BatteryState::CHARGED) {
+            // Nivel suficient sau încărcare finalizată: avansare către START.
             _advancePending = true;
         }
         else {
@@ -163,8 +163,8 @@ bool BatteryCheckScreen::updateStandbyBlinkPhase()
 
 void BatteryCheckScreen::drawMainContent()
 {
-    uint8_t level = _battery.getLevelPercent();
-    bool charging = _battery.isCharging();
+    float voltage = _battery.getVoltageV();
+    BatteryState state = _battery.getState();
 
     _tft->fillScreen(COLOR_BACKGROUND);
 
@@ -176,30 +176,30 @@ void BatteryCheckScreen::drawMainContent()
     _tft->setCursor((240 - titleWidth) / 2, 80);
     _tft->print("BATTERY LEVEL");
 
-    // Procent: XX %
-    char percentStr[8];
-    snprintf(percentStr, sizeof(percentStr), "%d %%", level);
+    // Valoare principală: tensiunea (X.XX V)
+    char voltStr[12];
+    snprintf(voltStr, sizeof(voltStr), "%.2f V", voltage);
 
     _tft->setTextSize(4);
-    int16_t percentWidth = strlen(percentStr) * 6 * 4;
-    _tft->setCursor((240 - percentWidth) / 2, 130);
-    _tft->print(percentStr);
+    int16_t voltWidth = strlen(voltStr) * 6 * 4;
+    _tft->setCursor((240 - voltWidth) / 2, 130);
+    _tft->print(voltStr);
 
     // Stare de încărcare
-    if (charging) {
+    if (state == BatteryState::CHARGING || state == BatteryState::CHARGED) {
         _tft->setTextColor(COLOR_YELLOW);
         _tft->setTextSize(2);
-        const char* chargingText = "CHARGING";
-        int16_t chargingWidth = strlen(chargingText) * 6 * 2;
-        _tft->setCursor((240 - chargingWidth) / 2, 200);
-        _tft->print(chargingText);
+        const char* chargeText = (state == BatteryState::CHARGING) ? "CHARGING" : "CHARGED";
+        int16_t chargeWidth = strlen(chargeText) * 6 * 2;
+        _tft->setCursor((240 - chargeWidth) / 2, 200);
+        _tft->print(chargeText);
     }
 
     // Indicator vizual (punct) în centrul ecranului, sub text.
     drawIndicator();
 
-    _displayedLevel = level;
-    _displayedCharging = charging;
+    _displayedLevel = _battery.getLevelPercent();
+    _displayedCharging = _battery.isCharging();
 }
 
 void BatteryCheckScreen::drawIndicator()
@@ -239,8 +239,8 @@ void BatteryCheckScreen::drawStandbyContent()
     }
 
     // Procent permanent aprins, deasupra indicatorului, textSize 1, culoare muted.
-    char percentStr[8];
-    snprintf(percentStr, sizeof(percentStr), "%d %%", level);
+    char voltStr[12];
+    snprintf(voltStr, sizeof(voltStr), "%.2f V", _battery.getVoltageV());
 
     // Înălțime font textSize 1 = 8 px; zona text 16 px înălțime pentru curățare.
     const int textY = 240;
@@ -248,9 +248,9 @@ void BatteryCheckScreen::drawStandbyContent()
 
     _tft->setTextColor(COLOR_TEXT_MUTED);
     _tft->setTextSize(1);
-    int16_t textWidth = strlen(percentStr) * 6;
+    int16_t textWidth = strlen(voltStr) * 6;
     _tft->setCursor((240 - textWidth) / 2, textY);
-    _tft->print(percentStr);
+    _tft->print(voltStr);
 }
 
 void BatteryCheckScreen::clearScreenKeepIndicator()

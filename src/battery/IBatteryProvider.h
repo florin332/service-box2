@@ -7,18 +7,20 @@
 // Stare bateriei determinată de Battery Manager (hardware-dependent).
 // UI-ul / sistemul de navigație aplică politica în funcție de această stare.
 //
-//   NORMAL   - nivel suficient (de la MEDIUM la FULL); operațiuni normale.
-//   LOW      - avertizare; nu se pot porni teste noi, dar cele în desfășurare
-//              continuă.
-//   CRITICAL - nivel critic; sistemul întrerupe controlat testele și revine
+//   NORMAL   - V > 3.60 V, fără încărcare; operațiuni normale.
+//   LOW      - 3.40 V < V <= 3.60 V; avertizare, fără teste noi (histerezis:
+//              iesire numai la V >= 3.70 V).
+//   CRITICAL - V <= 3.40 V; sistemul întrerupe controlat testele și revine
 //              la Battery Check.
-//   CHARGING - baterie în curs de încărcare.
+//   CHARGING - V > 4.00 V și I < -50 mA; încărcare activă.
+//   CHARGED  - V > 4.00 V și -0.5 mA < I < 5 mA; încărcare finalizată.
 // ============================================================================
 enum class BatteryState {
     NORMAL,
     LOW,
     CRITICAL,
-    CHARGING
+    CHARGING,
+    CHARGED
 };
 
 // ============================================================================
@@ -42,10 +44,17 @@ public:
     // Returnează true dacă bateria este în curs de încărcare.
     virtual bool isCharging() = 0;
 
-    // Returnează starea discretă a bateriei (NORMAL / LOW / CRITICAL / CHARGING).
+    // Returnează starea discretă a bateriei.
     // Stabilirea stării ține de Battery Manager (hardware-dependent); UI-ul
     // aplică doar politica asociată stării curente.
     virtual BatteryState getState() = 0;
+
+    // Returnează tensiunea bateriei în volți (afișată de UI în funcționare
+    // normală sau CHARGING/CHARGED).
+    virtual float getVoltageV() = 0;
+
+    // Returnează curentul în mA (negativ = încărcare).
+    virtual float getCurrentmA() = 0;
 };
 
 #endif // I_BATTERY_PROVIDER_H

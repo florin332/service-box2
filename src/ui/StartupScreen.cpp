@@ -97,6 +97,7 @@ void StartupScreen::drawButton(bool pressed) {
 
 void StartupScreen::drawBatteryInfo() {
     uint8_t level = _battery.getLevelPercent();
+    float voltage = _battery.getVoltageV();
     bool charging = _battery.isCharging();
 
     // Clear battery display area (between button and SD status, left aligned with SD)
@@ -110,12 +111,12 @@ void StartupScreen::drawBatteryInfo() {
     _tft->fillCircle(20, 274, BATTERY_DOT_RADIUS, color);
 
     // Text aligned with SD status, textSize 1, fixed muted color
-    char percentStr[24];
-    snprintf(percentStr, sizeof(percentStr), "BATTERY LEVEL: %d %%", level);
+    char batStr[32];
+    snprintf(batStr, sizeof(batStr), "BATTERY: %.2f V", voltage);
     _tft->setTextSize(1);
     _tft->setTextColor(COLOR_TEXT_MUTED);
     _tft->setCursor(32, 271);
-    _tft->print(percentStr);
+    _tft->print(batStr);
 
     _displayedLevel = level;
     _displayedCharging = charging;

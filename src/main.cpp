@@ -42,6 +42,7 @@
 #include "bsp/bsp_i2c.h"
 #include "bsp/bsp_cst328.h"
 #include "bsp/bsp_ina219.h"
+#include "bsp/bsp_battery.h"
 
 // Forward declarations
 bool readRawPoint(int32_t &rx, int32_t &ry);
@@ -845,9 +846,10 @@ void waitTouchRelease()
 #include "ui/StartupScreen.h"
 #include "ui/BatteryCheckScreen.h"
 
-// STUB / PROVIZORIU pentru testarea Battery Check pe graphic_ui.
-// Se elimină la integrarea implementării reale de baterie.
-#include "battery/BatteryStub.h"
+// Battery Manager comun (Marble + Waveshare), bazat pe INA219.
+// Jumper DEVELOPMENT pe GP28 (INPUT_PULLUP, activ LOW): inlocuieste
+// valorile INA219 reale cu valori simulate configurabile din serial.
+#include "battery/BspBatteryProvider.h"
 
 // ============================================================================
 // Pagini UI (comune, independente de hardware)
@@ -867,19 +869,24 @@ Adafruit_GFX& activeDisplay = display;
 Adafruit_GFX& activeDisplay = display; // Marble: ILI9341 real (tft)
 #endif
 
-// STUB / PROVIZORIU pentru testarea Battery Check.
-BatteryStub batteryStub;
+// Battery Manager comun (citeste INA219; mod DEV prin jumper GP28).
+BspBatteryProvider batteryProvider;
 
 // Pagina Battery Check (independentă de implementarea concretă a bateriei)
-BatteryCheckScreen batteryCheckScreen(&activeDisplay, batteryStub);
+BatteryCheckScreen batteryCheckScreen(&activeDisplay, batteryProvider);
 
 // Pagina START (implementata anterior, decuplata de HAL)
-StartupScreen startupScreen(&activeDisplay, batteryStub);
+StartupScreen startupScreen(&activeDisplay, batteryProvider);
 
 // ============================================================================
-// Pagina DASHBOARD (placeholder - doar desen, fara functionalitate)
+// Pagina DASHBOARD
 // ============================================================================
-static void renderDashboard(Adafruit_GFX* tft) {
+// Refresh provizoriu al valorilor INA219 (Waveshare)
+#define DASHBOARD_REFRESH_MS 500
+static unsigned long lastDashboardRefresh = 0;
+static bool dashboardBaseDrawn = false;
+
+static void renderDashboardBase(Adafruit_GFX* tft) {
     tft->fillScreen(0x0000); // Black
 
     tft->setTextColor(0xFFFF); // White
@@ -890,9 +897,9 @@ static void renderDashboard(Adafruit_GFX* tft) {
     tft->setTextColor(0x7BEF); // Gray
     tft->setTextSize(1);
     tft->setCursor(20, 95);
-    tft->print("placeholder - in dezvoltare");
+    tft->print("INA219 (provisional)");
 
-    // Buton BACK (placeholder pentru navigare inapoi la START)
+    // Buton BACK (navigare inapoi la START)
     // Geometry: X[50..190], Y[270..305]
     tft->fillRoundRect(50, 270, 140, 35, 6, 0x1967);  // Deep Blue
     tft->drawRoundRect(50, 270, 140, 35, 6, 0xFFFF);  // White outline
@@ -900,6 +907,51 @@ static void renderDashboard(Adafruit_GFX* tft) {
     tft->setTextSize(2);
     tft->setCursor(50 + 45, 270 + 10);
     tft->print("BACK");
+
+    dashboardBaseDrawn = true;
+}
+
+// Redeseneaza doar zona valorilor INA219 (fara flicker pe restul ecranului)
+static void renderDashboardValues(Adafruit_GFX* tft) {
+    tft->fillRect(20, 115, 200, 40, 0x0000);
+
+#if defined(SERVICEBOX_WAVESHARE)
+    ina219_data_t data;
+    bsp_ina219_read(&data);
+
+    tft->setTextSize(2);
+    tft->setTextColor(0xFFE0, 0x0000); // Yellow on Black
+    tft->setCursor(20, 115);
+    tft->print("V: ");
+    tft->print(data.bus_voltage_V, 2);
+    tft->print(" V  ");
+
+    tft->setTextColor(0x07E0, 0x0000); // Green on Black
+    tft->setCursor(20, 138);
+    tft->print("I: ");
+    tft->print(data.current_mA, 1);
+    tft->print(" mA  ");
+#else
+    tft->setTextSize(1);
+    tft->setTextColor(0x7BEF, 0x0000);
+    tft->setCursor(20, 115);
+    tft->print("INA219: n/a pe acest target");
+#endif
+}
+
+static void renderDashboard(Adafruit_GFX* tft) {
+    renderDashboardBase(tft);
+    renderDashboardValues(tft);
+}
+
+// Refresh periodic al valorilor cat timp dashboard-ul este activ
+static void dashboardUpdate() {
+    if (!dashboardBaseDrawn) return;
+    unsigned long now = millis();
+    if (now - lastDashboardRefresh >= DASHBOARD_REFRESH_MS) {
+        lastDashboardRefresh = now;
+        renderDashboardValues(&activeDisplay);
+    }
 }
 
 // Verifica daca touch-ul curent loveste butonul BACK din dashboard
@@ -917,6 +969,12 @@ bool refreshPageNeeded = true;
 // Arduino setup
 // ============================================================================
 void setup() {
+#if defined(SERVICEBOX_WAVESHARE)
+    // Pornire pe baterie: mentine alimentarea dupa eliberarea BAT KEY.
+    // Trebuie apelat primul, inainte de orice intarziere lunga.
+    bsp_battery_init(3000);
+#endif
+
     Serial.begin(115200);
 
     // Intarziere de pornire: permite deschiderea monitorului serial
@@ -1022,7 +1080,7 @@ void setup() {
     else
     {
         // BOOT -> Battery Check (prima pagină UI afișată)
-        batteryStub.begin();
+        batteryProvider.begin();
         batteryCheckScreen.init();
     }
 
@@ -1078,7 +1136,7 @@ void setup() {
     }
     else {
         // BOOT -> Battery Check (prima pagină UI afișată)
-        batteryStub.begin();
+        batteryProvider.begin();
         batteryCheckScreen.init();
     }
 
@@ -1090,8 +1148,8 @@ void setup() {
 // ============================================================================
 void loop() {
 
-    // STUB / PROVIZORIU: procesare comenzi seriale pentru testare baterie.
-    batteryStub.update();
+    // Battery Manager: citire INA219 / valori simulate DEV + comenzi seriale.
+    batteryProvider.update();
 
     // Citire input - o singura data per iteratie de loop
     inputUpdate();
@@ -1395,7 +1453,7 @@ void loop() {
     // POLITICĂ BATERIE: CRITICAL întrerupe orice test și revine la Battery Check
     // ========================================================================
     {
-        BatteryState batteryState = batteryStub.getState();
+        BatteryState batteryState = batteryProvider.getState();
         if (batteryState == BatteryState::CRITICAL && currentPage != PAGE_BATTERY_CHECK) {
             Serial.println("[UI Navigation] CRITICAL battery -> PAGE_BATTERY_CHECK");
             currentPage = PAGE_BATTERY_CHECK;
@@ -1448,14 +1506,19 @@ void loop() {
 
         if (refreshPageNeeded) {
             renderDashboard(&activeDisplay);
+            lastDashboardRefresh = millis();
             refreshPageNeeded = false;
             Serial.println("[UI Navigation] Dashboard afisat.");
         }
+
+        // Refresh periodic valori INA219 (provisional)
+        dashboardUpdate();
 
         // Navigare inapoi la START prin butonul BACK
         if (dashboardBackHit(currentX, currentY, isScreenActive)) {
             Serial.println("[UI Navigation] BACK -> PAGE_START");
             waitTouchRelease();  // Waveshare: evita re-trigger; Marble: no-op
+            dashboardBaseDrawn = false;
             currentPage = PAGE_START;
             startupScreen.init();
             refreshPageNeeded = true;

@@ -240,6 +240,22 @@ Driver: [src/bsp/bsp_ina219.h](src/bsp/bsp_ina219.h) / [src/bsp/bsp_ina219.cpp](
 Calibrare curentă (vezi bsp_ina219.h): shunt 0.1 ohm (R100), domeniu bus 32 V,
 curent +/-3.2 A cu rezoluție 100 uA/LSB.
 
+**Battery Management**: INA219 este sursa unică de măsurare pentru starea
+bateriei (comun Marble + Waveshare). Politica completă: vezi
+[src/battery_management_policy.md](src/battery_management_policy.md).
+
+## 2.8 Jumper DEVELOPMENT
+
+Status: **NOT TESTED**
+
+- [ ] DEV_MODE = GP28 (INPUT_PULLUP, activ LOW)
+
+* **GP28 = 0** (legat la GND): mod DEVELOPMENT — valorile INA219 sunt
+  înlocuite cu valori simulate configurabile prin comenzi seriale
+  (`bat setv`, `bat seti`, `bat preset ...`). Valorile sunt persistate
+  în EEPROM.
+* **GP28 = 1** (pull-up): funcționare normală.
+
 ---
 
 # 3. Shared / Bus Relationships

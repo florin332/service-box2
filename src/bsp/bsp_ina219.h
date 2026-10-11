@@ -40,9 +40,8 @@ typedef enum
 #define INA219_POWER_LSB_MW   2.0f   // 20 * Current_LSB
 
 // Sensul curentului depinde de orientarea shunt-ului (IN+/IN-) pe montaj.
-// 1 = curent pozitiv la INCARCARE (validat pe hardware: inainte de inversare,
-//     la incarcare se citea -130 mA).
-#define INA219_INVERT_CURRENT 1
+// 0 = foloseste direct semnul raportat de INA219.
+#define INA219_INVERT_CURRENT 0
 
 typedef struct
 {
