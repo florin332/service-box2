@@ -32,23 +32,26 @@ class StartupView {
 public:
     explicit StartupView(Adafruit_GFX* gfx);
 
-    // Desenare completa a paginii (fundal + titlu + buton + statusuri).
+    // Desenare completa a paginii (fundal + titlu + butoane + statusuri).
     void renderFull(const StartupViewModel& m);
 
     // Redesenari partiale (fara flicker: apelate doar la schimbari reale).
     void drawButton(const char* text);
+    void drawSdButton(bool enabled);
     void drawBatteryInfo(const StartupViewModel& m);
     void updateStorage(uint32_t freeMB, uint32_t totalMB, bool cardAvailable);
 
-    // Zona de hit-test a butonului (calculata din layout, nu hardcodata).
+    // Zone de hit-test (calculate din layout, nu hardcodate).
     const UiRect& buttonRect() const { return _btnRect; }
+    const UiRect& sdButtonRect() const { return _sdRect; }
 
 private:
     Adafruit_GFX* _gfx;
 
     bool     _layoutReady;
     UiLayout _layout;
-    UiRect   _btnRect;
+    UiRect   _btnRect;   // buton START
+    UiRect   _sdRect;    // buton SD (deasupra START)
     int16_t  _btnRadius;
     int16_t  _dotRadius;
 

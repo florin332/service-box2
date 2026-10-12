@@ -4,12 +4,14 @@
 // StartupView - implementare.
 //
 // Toate pozitiile sunt in miimi din dimensiunile display-ului, calibrate
-// astfel incat pe 240x320 (ambele targeturi curente) sa reproduca exact
-// layout-ul validat anterior pe hardware:
-//   titlu y=45 (141‰), subtitlu y=95 (297‰), versiune y=135 (422‰),
-//   buton (50,190,140,45) = (208‰, 594‰, 583‰, 141‰), raza 6 (25‰),
+// astfel incat pe 240x320 (ambele targeturi curente) sa reproduca aspectul
+// validat pe hardware, cu re-layout pentru butonul SD:
+//   titlu y=30 (94‰, font size 2 - redus o treapta), subtitlu y=75 (234‰),
+//   buton SD (50,150,140,30) = (208‰, 469‰, 583‰, 94‰),
+//   buton START (50,200,140,45) = (208‰, 625‰, 583‰, 141‰), raza 6 (25‰),
 //   rand baterie y=266..286 (831‰), punct x=20 (83‰) / text x=32 (133‰),
-//   rand SD y=282 (881‰), punct y=290 (906‰) / text y=287 (897‰).
+//   rand SD status y=282 (881‰), punct y=290 (906‰) / text y=287 (897‰).
+// Eticheta de versiune (v1.0.0) a fost eliminata la cerinta.
 // ============================================================================
 
 StartupView::StartupView(Adafruit_GFX* gfx)
@@ -27,8 +29,13 @@ void StartupView::ensureLayout()
 
     _layout = UiLayout(_gfx->width(), _gfx->height());
 
+    // Buton SD: aceeasi latime cu START, inaltime redusa, deasupra START.
+    _sdRect    = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
+                                      208, 469, 583, 94);
+    // Buton START coborat fata de pozitia initiala (594) pentru a face
+    // loc butonului SD.
     _btnRect   = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                      208, 594, 583, 141);
+                                      208, 625, 583, 141);
     _btnRadius = _layout.scaleMin(25);   // 6 px pe 240
     _dotRadius = _layout.scaleMin(17);   // 4 px pe 240
 
@@ -41,32 +48,53 @@ void StartupView::renderFull(const StartupViewModel& m)
 
     _gfx->fillScreen(UiTheme::COLOR_BACKGROUND);
 
-    // Titlu principal (centrat orizontal)
-    uint8_t sTitle = UiTheme::textSizeScaled(_layout.height(), 3);
+    // Titlu principal (centrat orizontal, font redus o treapta si mutat
+    // mai sus: face loc butonului SD deasupra butonului START)
+    uint8_t sTitle = UiTheme::textSizeScaled(_layout.height(), 2);
     _gfx->setTextColor(UiTheme::COLOR_TEXT_MAIN);
     _gfx->setTextSize(sTitle);
     _gfx->setCursor(_layout.centerTextX(sTitle, strlen("SERVICE BOX")),
-                    _layout.py(141));
+                    _layout.py(94));
     _gfx->print("SERVICE BOX");
 
     // Subtitlu
     uint8_t sSub = UiTheme::textSizeScaled(_layout.height(), 2);
     _gfx->setTextSize(sSub);
     _gfx->setCursor(_layout.centerTextX(sSub, strlen("PANOURI ASCENSOARE")),
-                    _layout.py(297));
+                    _layout.py(234));
     _gfx->print("PANOURI ASCENSOARE");
 
-    // Eticheta versiune
-    uint8_t sVer = UiTheme::textSizeScaled(_layout.height(), 1);
-    _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
-    _gfx->setTextSize(sVer);
-    _gfx->setCursor(_layout.centerTextX(sVer, strlen("v1.0.0")),
-                    _layout.py(422));
-    _gfx->print("v1.0.0");
-
+    drawSdButton(m.sdAvailable);
     drawButton(m.buttonText);
     drawBatteryInfo(m);
     updateStorage(m.sdFreeMB, m.sdTotalMB, m.sdAvailable);
+}
+
+void StartupView::drawSdButton(bool enabled)
+{
+    ensureLayout();
+
+    const UiRect& r = _sdRect;
+
+    uint16_t fill = enabled ? UiTheme::COLOR_BTN_BASE
+                            : UiTheme::COLOR_BTN_DISABLED;
+    _gfx->fillRoundRect(r.x, r.y, r.w, r.h, _btnRadius, fill);
+
+    // Diferenta card detectat/nedetectat o face DOAR conturul:
+    // alb cu card, gri fara card. Textul ramane mereu gri (ca pe START).
+    uint16_t border = enabled ? UiTheme::COLOR_TEXT_MAIN
+                              : UiTheme::COLOR_TEXT_MUTED;
+    _gfx->drawRoundRect(r.x, r.y, r.w, r.h, _btnRadius, border);
+
+    uint8_t s = UiTheme::textSizeScaled(_layout.height(), 2);
+    int16_t textWidth  = 2 * 6 * s;   // "SD"
+    int16_t textHeight = 8 * s;
+
+    _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
+    _gfx->setTextSize(s);
+    _gfx->setCursor(r.x + (r.w - textWidth) / 2,
+                    r.y + (r.h - textHeight) / 2);
+    _gfx->print("SD");
 }
 
 void StartupView::drawButton(const char* text)
@@ -100,20 +128,27 @@ void StartupView::drawBatteryInfo(const StartupViewModel& m)
 {
     ensureLayout();
 
-    // Zona randului de baterie (intre buton si status SD)
+    // Zona randului de baterie (fara suprapunere cu randul SD de mai jos)
     UiRect zone = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                       42, 831, 917, 62);
+                                       42, 831, 917, 44);
     _gfx->fillRect(zone.x, zone.y, zone.w, zone.h, UiTheme::COLOR_BACKGROUND);
 
     // Punct indicator colorat (culoarea vine rezolvata din model)
-    _gfx->fillCircle(_layout.px(83), _layout.py(856), _dotRadius, m.batteryColor);
+    _gfx->fillCircle(_layout.px(83), _layout.py(853), _dotRadius, m.batteryColor);
 
-    // Text tensiune, aliniat cu statusul SD
+    // Text tensiune, aliniat cu statusul SD.
+    // NOTA: snprintf("%f") NU este suportat de newlib-nano (config default
+    // Pico SDK) - valoarea nu se printeaza. Formatare manuala: parte
+    // intreaga + 2 zecimale, cu aritmetica pe intregi.
+    float v = m.batteryVoltageV;
+    int vi = (int)v;
+    int vd = (int)((v - vi) * 100.0f + 0.5f);
+    if (vd >= 100) { vi++; vd = 0; }  // rotunjire care depaseste (ex. 3.999)
     char batStr[32];
-    snprintf(batStr, sizeof(batStr), "BATTERY: %.2f V", m.batteryVoltageV);
+    snprintf(batStr, sizeof(batStr), "BATTERY: %d.%02d V", vi, vd);
     _gfx->setTextSize(UiTheme::textSizeScaled(_layout.height(), 1));
     _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
-    _gfx->setCursor(_layout.px(133), _layout.py(847));
+    _gfx->setCursor(_layout.px(133), _layout.py(844));
     _gfx->print(batStr);
 }
 
@@ -121,22 +156,22 @@ void StartupView::updateStorage(uint32_t freeMB, uint32_t totalMB, bool cardAvai
 {
     ensureLayout();
 
-    // Rescrie randul de jos (evita artefacte de flicker)
+    // Rescrie randul de jos (fara suprapunere cu randul baterie de mai sus)
     UiRect zone = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                       42, 881, 917, 62);
+                                       42, 900, 917, 44);
     _gfx->fillRect(zone.x, zone.y, zone.w, zone.h, UiTheme::COLOR_BACKGROUND);
     _gfx->setTextSize(UiTheme::textSizeScaled(_layout.height(), 1));
 
     uint16_t dotColor = cardAvailable ? UiTheme::COLOR_GREEN : UiTheme::COLOR_RED;
-    _gfx->fillCircle(_layout.px(83), _layout.py(906), _dotRadius, dotColor);
+    _gfx->fillCircle(_layout.px(83), _layout.py(922), _dotRadius, dotColor);
 
     _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
-    _gfx->setCursor(_layout.px(133), _layout.py(897));
+    _gfx->setCursor(_layout.px(133), _layout.py(913));
 
     if (cardAvailable) {
-        _gfx->print("SD: " + String(freeMB) + " MB / " +
-                    String((float)totalMB / 1000.0, 1) + " GB FREE");
+        // Pe pagina START doar starea; capacitatile sunt pe pagina SD Check.
+        _gfx->print("SD: READY");
     } else {
-        _gfx->print("SD CARD DISCONNECTED / ERROR");
+        _gfx->print("SD: MISSING");
     }
 }

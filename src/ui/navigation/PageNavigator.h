@@ -8,9 +8,9 @@
 
 class StartupScreen;
 class BatteryCheckScreen;
+class SdCheckScreen;
 
 // ============================================================================
-// PageNavigator - masina de stari a paginilor UI.
 //
 // Responsabilitati:
 //   - pagina curenta + tranzitiile (conform regulilor din NavigationPolicy)
@@ -32,7 +32,7 @@ class BatteryCheckScreen;
 class PageNavigator {
 public:
     PageNavigator(StartupScreen& startup, BatteryCheckScreen& batteryCheck,
-                  IBatteryProvider& battery);
+                  SdCheckScreen& sdCheck, IBatteryProvider& battery);
 
     // O iteratie de loop: proceseaza inputul si aplica regulile.
     void update(int16_t touchX, int16_t touchY, bool touched);
@@ -51,6 +51,7 @@ public:
 private:
     StartupScreen&       _startup;
     BatteryCheckScreen&  _batteryCheck;
+    SdCheckScreen&       _sdCheck;
     IBatteryProvider&    _battery;
 
     UiPageId _page;
@@ -86,6 +87,7 @@ private:
     void updateBatteryCheckPage(int16_t x, int16_t y, bool touched);
     void updateStartPage(int16_t x, int16_t y, bool touched);
     void updateDashboardPage(int16_t x, int16_t y, bool touched);
+    void updateSdCheckPage(int16_t x, int16_t y, bool touched);
 
     void enterStandby();
     void wakeFromStandby();

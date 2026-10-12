@@ -18,7 +18,8 @@ namespace UiTheme {
     constexpr uint16_t COLOR_BACKGROUND = 0x0000; // Black
     constexpr uint16_t COLOR_TEXT_MAIN  = 0xFFFF; // White
     constexpr uint16_t COLOR_TEXT_MUTED = 0x9DF3; // Gray
-    constexpr uint16_t COLOR_BTN_BASE   = 0x1967; // Deep Blue
+    constexpr uint16_t COLOR_BTN_BASE     = 0x1967; // Deep Blue
+    constexpr uint16_t COLOR_BTN_DISABLED = 0x3186; // Dark Gray (buton inactiv)
     constexpr uint16_t COLOR_GREEN      = 0x07E0; // Bright Green
     constexpr uint16_t COLOR_YELLOW     = 0xFFE0; // Yellow
     constexpr uint16_t COLOR_RED        = 0xF800; // Red

@@ -24,6 +24,10 @@ private:
     IBatteryProvider& _battery;
     bool _isRendered;
     bool _buttonPressed;
+    bool _sdButtonPressed;  // hit-tracking buton SD (activare la eliberare)
+    bool _sdAvailable;      // stare card (setata prin updateStorageInfo)
+    uint32_t _sdFreeMB;     // capacitati reale (retine pentru renderFull)
+    uint32_t _sdTotalMB;
 
     // Battery display tracking (anti-flicker: redesenare doar la schimbare)
     uint8_t _displayedLevel;
@@ -31,7 +35,7 @@ private:
     unsigned long _lastBatteryUpdateMs;
 
     // Button display tracking (avoid redraw flicker).
-    // Butonul nu are feedback vizual la apăsare, deci doar textul contează.
+    // Butonul nu are feedback vizual la apasare, deci doar textul conteaza.
     String _displayedButtonText;
 
     // Pragurile de nivel si gating-ul baterie sunt in NavigationPolicy.
@@ -44,7 +48,13 @@ public:
     StartupScreen(Adafruit_GFX* tftInstance, IBatteryProvider& battery);
     void init();
     void render(bool forceRedraw = false);
-    bool update(int touchX, int touchY, bool isTouched); // Returns true when START is pressed & released
+
+    // Interactiune tactila. Returneaza o cerere de navigare (sau NONE).
+    // START ramane conditionat de politica baterie; SD este gri/dezactivat
+    // cand lipseste cardul.
+    enum class TouchRequest : uint8_t { NONE, START, SD_CHECK };
+    TouchRequest update(int touchX, int touchY, bool isTouched);
+
     void updateStorageInfo(uint32_t freeMB, uint32_t totalMB, bool cardAvailable);
 };
 

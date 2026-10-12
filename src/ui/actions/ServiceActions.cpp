@@ -17,9 +17,12 @@ ServiceActions::ServiceActions(IBatteryProvider& battery)
 ActionOutcome ServiceActions::execute(UiEvent ev)
 {
     switch (ev) {
-        case UiEvent::START_CONFIRMED:  return handleStartConfirmed();
-        case UiEvent::FORCED_LOW_POWER: return handleForcedLowPower();
-        case UiEvent::BACK_TO_START:    return handleBackToStart();
+        case UiEvent::START_CONFIRMED:   return handleStartConfirmed();
+        case UiEvent::FORCED_LOW_POWER:  return handleForcedLowPower();
+        case UiEvent::BACK_TO_START:     return handleBackToStart();
+        case UiEvent::SD_CHECK_REQUESTED:
+            // Navigare catre pagina SD Check: nimic de executat in Actions.
+            return { ActionResult::OK, "sd check page" };
         case UiEvent::NONE:
         default:
             return { ActionResult::OK, "none" };

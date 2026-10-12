@@ -17,6 +17,7 @@
 #include "bsp/bsp_display.h"
 #include "bsp/bsp_touch.h"
 #include "bsp/bsp_battery.h"
+#include "bsp/bsp_sdcard.h"
 #include "battery/BspBatteryProvider.h"
 
 #if defined(SERVICEBOX_WAVESHARE)
@@ -25,6 +26,7 @@
 
 #include "ui/StartupScreen.h"
 #include "ui/BatteryCheckScreen.h"
+#include "ui/SdCheckScreen.h"
 #include "ui/navigation/PageNavigator.h"
 #include "ui/navigation/UiEvents.h"
 #include "ui/actions/ServiceActions.h"
@@ -43,12 +45,18 @@ static BspBatteryProvider batteryProvider;
 // Pagini UI
 static BatteryCheckScreen batteryCheckScreen(&activeDisplay, batteryProvider);
 static StartupScreen      startupScreen(&activeDisplay, batteryProvider);
+static SdCheckScreen      sdCheckScreen(&activeDisplay);
 
 // Navigator de pagini (masina de stari + reguli)
-static PageNavigator navigator(startupScreen, batteryCheckScreen, batteryProvider);
+static PageNavigator navigator(startupScreen, batteryCheckScreen, sdCheckScreen,
+                               batteryProvider);
 
 // Actiuni (executia efectiva svc box)
 static ServiceActions actions(batteryProvider);
+
+// Flag: starea SD a fost trimisa ecranului START (se retrimite la fiecare
+// revenire pe pagina - acopera si intoarcerea din SD Check).
+static bool sdStatePushed = false;
 
 // Calibrare touch (modul separat, prioritar fata de UI)
 static TouchCalibration calibration;
@@ -113,6 +121,13 @@ void setup()
     Serial.flush();
 #endif
 
+    // Init SD card + self-test (Waveshare: SDIO GP19-24 | Marble: SPI GP16-19)
+    // Nu blocheaza boot-ul daca lipseste cardul: esecul este doar raportat.
+    Serial.println("BOOT: init SD card...");
+    Serial.flush();
+    bsp_sdcard_self_test();
+    Serial.flush();
+
     if (calibration.isActive())
     {
         // Afisare pagina conform stadiului de calibrare
@@ -120,6 +135,22 @@ void setup()
     }
     else
     {
+        // Montare card SD la boot (daca exista). Fara blocaje lungi:
+        // cardul este pregatit pe PC, UI-ul nu are mount/format.
+        Serial.println("BOOT: mount SD card (daca este prezent)...");
+        Serial.flush();
+        if (bsp_sdcard_mount())
+        {
+            Serial.printf("SD: montat - %lu MB total / %lu MB liber\n",
+                          (unsigned long)bsp_sdcard_size_mb(),
+                          (unsigned long)bsp_sdcard_free_mb());
+        }
+        else
+        {
+            Serial.println("SD: card absent sau eroare de montare");
+        }
+        Serial.flush();
+
         // BOOT -> Battery Check (prima pagina UI afisata)
         batteryProvider.begin();
         batteryCheckScreen.init();
@@ -148,6 +179,22 @@ void loop()
 
     // Buton hardware recalibrare (doar in mod normal, calibrare completa)
     calibration.checkRecalibButton();
+
+    // Stare SD catre ecranul START (o singura data per intrare in pagina):
+    // updateStorageInfo() apeleaza si drawSdButton(), dar renderFull() este
+    // apelat de navigator DUPA aceasta linie in aceeasi iteratie, deci
+    // ordinea finala de desenare ramane corecta (renderFull acopera totul).
+    if (navigator.currentPage() == UiPageId::START && !sdStatePushed)
+    {
+        startupScreen.updateStorageInfo(bsp_sdcard_free_mb(),
+                                        bsp_sdcard_size_mb(),
+                                        bsp_sdcard_is_mounted());
+        sdStatePushed = true;
+    }
+    else if (navigator.currentPage() != UiPageId::START)
+    {
+        sdStatePushed = false;  // retrimite la urmatoarea intrare in START
+    }
 
     // UI: navigatorul aplica regulile si deseneaza pagina curenta.
     // Evenimentele emise sunt executate de stratul Actions.

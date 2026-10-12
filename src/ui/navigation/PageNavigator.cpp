@@ -2,6 +2,7 @@
 
 #include "../StartupScreen.h"
 #include "../BatteryCheckScreen.h"
+#include "../SdCheckScreen.h"
 #include "NavigationPolicy.h"
 #include "../graphic/UiLayout.h"
 #include "../graphic/UiTheme.h"
@@ -19,9 +20,11 @@
 
 PageNavigator::PageNavigator(StartupScreen& startup,
                              BatteryCheckScreen& batteryCheck,
+                             SdCheckScreen& sdCheck,
                              IBatteryProvider& battery)
     : _startup(startup)
     , _batteryCheck(batteryCheck)
+    , _sdCheck(sdCheck)
     , _battery(battery)
     , _page(UiPageId::BATTERY_CHECK)
     , _pageNeedsRender(true)
@@ -84,6 +87,13 @@ void PageNavigator::enterPage(UiPageId page)
             _dashboardBaseDrawn = false;
             _dashboardLastRefreshMs = millis();
             _backWasHeld = false;
+            break;
+
+        case UiPageId::SD_CHECK:
+            // Snapshot-ul SD este citit si desenat aici, la intrarea
+            // in pagina (init contine si desenarea completa).
+            _sdCheck.init();
+            _pageNeedsRender = false;
             break;
     }
 }
@@ -199,10 +209,33 @@ void PageNavigator::updateStartPage(int16_t x, int16_t y, bool touched)
         _pageNeedsRender = false;
     }
 
-    if (_startup.update(x, y, touched)) {
-        Serial.println("[UI Navigation] START confirmat -> DASHBOARD");
-        enterPage(UiPageId::DASHBOARD);
-        pushEvent(UiEvent::START_CONFIRMED);
+    switch (_startup.update(x, y, touched)) {
+        case StartupScreen::TouchRequest::START:
+            Serial.println("[UI Navigation] START confirmat -> DASHBOARD");
+            enterPage(UiPageId::DASHBOARD);
+            pushEvent(UiEvent::START_CONFIRMED);
+            break;
+
+        case StartupScreen::TouchRequest::SD_CHECK:
+            Serial.println("[UI Navigation] SD -> SD_CHECK");
+            enterPage(UiPageId::SD_CHECK);
+            pushEvent(UiEvent::SD_CHECK_REQUESTED);
+            break;
+
+        case StartupScreen::TouchRequest::NONE:
+        default:
+            break;
+    }
+}
+
+void PageNavigator::updateSdCheckPage(int16_t x, int16_t y, bool touched)
+{
+    // Pagina este statica (desenata la intrare); aici doar butonul BACK.
+    if (_sdCheck.update(x, y, touched)) {
+        Serial.println("[UI Navigation] SD Check BACK -> START");
+        bsp_touch_wait_release();
+        enterPage(UiPageId::START);
+        pushEvent(UiEvent::BACK_TO_START);
     }
 }
 
@@ -347,6 +380,9 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
             break;
         case UiPageId::DASHBOARD:
             updateDashboardPage(touchX, touchY, touched);
+            break;
+        case UiPageId::SD_CHECK:
+            updateSdCheckPage(touchX, touchY, touched);
             break;
     }
 }

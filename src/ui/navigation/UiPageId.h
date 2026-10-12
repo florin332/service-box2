@@ -12,6 +12,7 @@ enum class UiPageId : uint8_t {
     BATTERY_CHECK,
     START,
     DASHBOARD,
+    SD_CHECK,
 };
 
 #endif // UI_PAGE_ID_H

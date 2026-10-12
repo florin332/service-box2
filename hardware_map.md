@@ -179,29 +179,39 @@ Status: **TESTED/ OK**
 
 ## 2.3 IMU — QMI8658
 
-Bus:
+Status: **OUT OF SCOPE**
 
-`I2C1`
-
-Status: **NOT TESTED**
-
-- [ ] IMU_SDA  = GP6
-- [ ] IMU_SCL  = GP7
-- [ ] IMU_INT1 = GP23
-- [ ] IMU_INT2 = GP24
+> Prezent fizic pe placa (I2C1, GP6/GP7, INT1=GP8, INT2=GP9 conform
+> pinout-ului oficial), dar nu este folosit in acest proiect.
+> Pastrat aici doar pentru referinta de pini.
 
 ## 2.4 SD Card
 
-Bus:
+Interfata:
 
-`SPI1`
+`SDIO (4-bit, PIO)`
 
 Status: **NOT TESTED**
 
-- [ ] SD_CS   = GP8
-- [ ] SD_MOSI = GP11
-- [ ] SD_MISO = GP12
-- [ ] SD_SCLK = GP10
+Conform pinout-ului oficial al placii, slotul SD este cablat SDIO nativ
+(identic cu exemplul `sd_card_sdio` / biblioteca
+`carlk3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico`):
+
+- [ ] SD_SCK = GP19 (CLK; derivat PIO: D0_gpio - 2)
+- [ ] SD_CMD = GP20
+- [ ] SD_D0  = GP21
+- [ ] SD_D1  = GP22 (D0 + 1)
+- [ ] SD_D2  = GP23 (D0 + 2)
+- [ ] SD_D3  = GP24 (D0 + 3)
+
+Configuratie driver (`sd_sdio_if_t`): `.CMD_gpio = 20, .D0_gpio = 21`.
+Constrangere PIO: CLK/D1/D2/D3 sunt la offset-uri fixe fata de D0 si nu
+pot fi remapat independent.
+
+`baud_rate` trebuie calculat din frecventa reala a sistemului
+(ex. `clock_get_hz(clk_sys) / 6`), nu hardcodat la 125 MHz.
+
+Nu exista chip-select si NU se imparte magistrala SPI cu LCD-ul.
 
 ## 2.5 Buton recalibrare touch
 
@@ -213,11 +223,10 @@ Status: **TESTED - OK**
 
 Status: **NOT TESTED**
 
-> UART pin mapping is not currently defined in the implementation.
-> Do not assume a pin mapping here until it is explicitly defined.
+Conform pinout-ului oficial al placii:
 
-- [ ] TX = TBD
-- [ ] RX = TBD
+- [ ] TX = GP0
+- [ ] RX = GP1
 - [ ] Baud rate = TBD
 
 ## 2.7 Monitor curent — INA219
@@ -232,7 +241,7 @@ Adresă I2C:
 
 Status: **NOT TESTED**
 
-- [ ] INA219_SDA = GP6 (magistrală comună cu touch CST328 și IMU QMI8658)
+- [ ] INA219_SDA = GP6 (magistrala comuna cu touch CST328)
 - [ ] INA219_SCL = GP7
 
 Driver: [src/bsp/bsp_ina219.h](src/bsp/bsp_ina219.h) / [src/bsp/bsp_ina219.cpp](src/bsp/bsp_ina219.cpp)
@@ -254,38 +263,44 @@ Status: **NOT TESTED**
   înlocuite cu valori simulate configurabile prin comenzi seriale
   (`bat setv`, `bat seti`, `bat preset ...`). Valorile sunt persistate
   în EEPROM.
-* **GP28 = 1** (pull-up): funcționare normală.
+* **GP28 = 1** (pull-up): functionare normala.
+
+## 2.9 Pini baterie / power (placa Waveshare)
+
+Status: **NOT TESTED**
+
+Conform pinout-ului oficial:
+
+- [ ] KEY_BAT  = GP25 (buton/intrare baterie — functie exacta de verificat)
+- [ ] BAT_EN   = GP26 (enable circuit baterie — de verificat)
+- [ ] BAT_ADC  = GP27 (masurare analogica — de verificat fata de INA219)
+- [ ] GPIO28   = GP28 (folosit de DEV_MODE, vezi 2.8)
+
+> Relatia dintre BAT_ADC (GP27) si INA219 trebuie clarificata la
+> integrarea managementului bateriei; INA219 ramane sursa unica de
+> masurare pana la o decizie contrara.
 
 ---
 
 # 3. Shared / Bus Relationships
 
-## 3.1 Waveshare LCD + SD
+## 3.1 Waveshare SD Card
 
-LCD and SD share the same SPI bus.
-
-### SPI signals
-
-- MOSI = GP11
-- MISO = GP12
-- SCLK = GP10
-
-### Chip Select
-
-- LCD CS = GP13
-- SD CS  = GP8
+SD card-ul NU imparte magistrala SPI cu LCD-ul. Slotul SD este pe
+interfata SDIO dedicata (GP19-GP24), complet separata de SPI-ul LCD-ului
+(GP10-GP13). Nu exista conflicte de bus intre LCD si SD.
 
 Status:
 
 - [x] LCD SPI operation tested
-- [ ] SD SPI operation tested
+- [ ] SD SDIO operation tested
 - [ ] LCD + SD simultaneous operation tested
 
 ---
 
-## 3.2 Waveshare Touch + IMU + INA219
+## 3.2 Waveshare Touch + INA219
 
-Touch, IMU și INA219 împart aceeași magistrală I2C.
+Touch si INA219 impart aceeasi magistrala I2C.
 
 ### I2C1 signals
 
@@ -297,21 +312,14 @@ Touch, IMU și INA219 împart aceeași magistrală I2C.
 - INT = GP18
 - RST = GP17
 
-### IMU
-
-- INT1 = GP23
-- INT2 = GP24
-
 ### INA219
 
-- Adresă = 0x40
+- Adresa = 0x40
 
 Status:
 
 - [x] Touch tested
-- [ ] IMU tested
 - [ ] INA219 tested
-- [ ] Touch + IMU simultaneous operation tested
 - [ ] Touch + INA219 simultaneous operation tested
 
 ---
@@ -322,11 +330,10 @@ Status:
 
 - [x] LCD / Display
 - [x] Touch
-- [ ] SD Card
+- [ ] SD Card (SDIO, GP19-GP24)
 - [ ] Battery measurement
 - [ ] Charging detection
 - [ ] RS485
-- [ ] IMU
 - [ ] INA219 (monitor curent, I2C 0x40)
 - [x] LCD + Touch
 - [ ] LCD + SD

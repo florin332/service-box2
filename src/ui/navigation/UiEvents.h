@@ -16,6 +16,7 @@ enum class UiEvent : uint8_t {
     BACK_TO_START,      // navigare inapoi catre START (ex: buton BACK)
     FORCED_LOW_POWER,   // baterie CRITICAL: nav fortata la Battery Check
                         // (Actions poate opri testele in desfasurare)
+    SD_CHECK_REQUESTED, // utilizatorul a deschis pagina SD Check
 };
 
 #endif // UI_EVENTS_H
