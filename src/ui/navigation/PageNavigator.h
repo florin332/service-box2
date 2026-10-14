@@ -23,6 +23,8 @@ class FlashDutScreen;
 //     FORCED_LOW_POWER catre Actions)
 //   - gating START: emite START_CONFIRMED numai daca politica permite
 //   - navigarea din DASHBOARD: FLASH -> Flash DUT, SVC OUT -> START
+//   - din FLASH_DUT: BACK -> DASHBOARD (sesiunea de service ramane
+//     activa); terminarea flash-ului -> START (panelul a reboot-at)
 //   - timp minim de stationare pe pagina (PAGE_MIN_DWELL_MS): atingerile
 //     sunt ignorate imediat dupa o tranzitie, pentru a nu activa din
 //     greseala butoane de pe pagina noua care se suprapun cu cele de pe
@@ -40,6 +42,13 @@ public:
     PageNavigator(StartupScreen& startup, BatteryCheckScreen& batteryCheck,
                   SdCheckScreen& sdCheck, DashboardScreen& dashboard,
                   FlashDutScreen& flashDut, IBatteryProvider& battery);
+
+    // Intrarea formala in pagina initiala (BATTERY_CHECK). Se apeleaza la
+    // finalul setup(): reseteaza timpii de activitate/stationare, astfel
+    // timeout-ul de 5s si dwell-ul pornesc din momentul in care pagina
+    // devine efectiv vizibila (setup-ul poate dura >5s: BAT KEY 3s +
+    // SD self-test + mount), nu din momentul constructii.
+    void begin();
 
     // O iteratie de loop: proceseaza inputul si aplica regulile.
     void update(int16_t touchX, int16_t touchY, bool touched);

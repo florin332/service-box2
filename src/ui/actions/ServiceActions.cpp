@@ -45,9 +45,19 @@ void ServiceActions::update()
 
 ActionOutcome ServiceActions::handleStartConfirmed()
 {
-    // Handshake-ul (mb_01) se face la INTRAREA in pagina START, nu aici -
-    // la acest punct DUT-ul este deja in Service Mode si PanelInfo este
-    // disponibil (vezi PageNavigator::enterPage).
+    // Handshake la apasarea butonului START (prompt1.md: detect ->
+    // handshake -> identificare): "mb_01" (SRV ENTER) pune DUT-ul in
+    // Service Mode si intoarce identitatea "D_...". Blocant max ~2.5s,
+    // doar daca DUT-ul raspunde. Rezultatul (PanelInfo) este pastrat in
+    // dut_protocol si citit de pagina Flash pentru filtrarea firmware-urilor.
+    if (dut_cdc_connected()) {
+        char identity[24];
+        if (dut_enter_service(identity, sizeof(identity))) {
+            Serial.printf("[Actions] START handshake: %s\n", identity);
+        } else {
+            Serial.println("[Actions] START: handshake esuat");
+        }
+    }
     // TODO(pas viitor): pornire secventa teste panouri ascensoare.
     _testActive = true;
     Serial.println("[Actions] START_CONFIRMED -> secventa teste (placeholder)");

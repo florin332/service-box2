@@ -19,7 +19,7 @@ INA219, cu următoarea prioritate:
 | **CRITICAL** | V ≤ 3,40 V | Blochează testele; `main.cpp` revine forțat la Battery Check |
 | **LOW** | 3,40 V < V ≤ 3,60 V | Avertizare; blochează pornirea testelor noi. Ieșire **numai** la V ≥ 3,70 V (histerezis) |
 | **CHARGED** | V > 4,00 V și −0,5 mA < I < 5 mA | Semnalează finalizarea încărcării; avansare automată ca NORMAL |
-| **CHARGING** | V > 4,00 V și I < −50 mA | Semnalează încărcarea activă; rămâne în Battery Check |
+| **CHARGING** | V > 4,00 V și I < −50 mA | Semnalează încărcarea activă; avansare automată ca NORMAL |
 | **NORMAL** | restul | Funcționare normală |
 
 Ordinea de evaluare: `CRITICAL > LOW > CHARGED > CHARGING > NORMAL`.
@@ -84,6 +84,5 @@ Toate comenzile de setare salvează valorile în EEPROM.
   Battery Check.
 - **LOW**: butonul START afișează `BATT LOW` și blockează pornirea
   testelor noi; testele în desfășurare continuă.
-- **CHARGING**: Battery Check nu avansează automat.
-- **CHARGED** / **NORMAL**: Battery Check avansează automat către START
-  după timeout de 5 s.
+- **CHARGING** / **CHARGED** / **NORMAL**: Battery Check avansează
+  automat către START după timeout de 5 s.

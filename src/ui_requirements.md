@@ -77,22 +77,18 @@ CHARGING
 
 În această stare:
 
-- nu se trece automat la pagina următoare;
-- pagina se stinge automat după 5 secunde de la ultima activitate;
-- atingerea ecranului reaprinde pagina;
+- la expirarea timeout-ului de 5 secunde fără atingere se avansează
+  automat la pagina următoare (START), la fel ca în funcționarea
+  normală;
+- atingerea ecranului resetează temporizarea de 5 secunde;
 - atingerea ecranului nu execută nicio comandă și nu există butoane;
-- cât timp ecranul este stins, pe display rămâne vizibil doar un punct
-  indicator;
+- pagina afișează textul CHARGING cât timp încărcarea este activă;
 - punctul indicator își schimbă/pulsează culoarea în funcție de nivelul
   bateriei:
   - LOW → roșu;
   - MEDIUM → galben;
   - GOOD → verde;
-  - baterie complet încărcată → verde continuu;
-- atingerea ecranului poate reaprinde pagina indiferent de starea
-  bateriei;
-- cât timp încărcarea este activă, Battery Check rămâne starea curentă
-  și nu continuă automat către pagina următoare.
+  - baterie complet încărcată → verde continuu.
 
 ---
 
@@ -103,20 +99,19 @@ reactivarea ecranului.
 
 După 5 secunde fără atingerea ecranului:
 
-- partea grafică principală a paginii se stinge;
-- rămâne activ doar punctul indicator al bateriei;
-- punctul continuă să indice starea bateriei.
+- dacă avansarea automată este permisă (NORMAL / CHARGING / CHARGED),
+  se trece la pagina următoare (START);
+- dacă avansarea automată este blocată (LOW / CRITICAL):
+  - partea grafică principală a paginii se stinge;
+  - rămâne activ doar punctul indicator al bateriei;
+  - punctul continuă să indice starea bateriei.
 
-O atingere a ecranului:
+În standby, o atingere a ecranului:
 
 - reaprinde pagina Battery Check;
 - nu reprezintă o comandă;
 - nu modifică starea bateriei;
 - resetează temporizarea de 5 secunde.
-
-În cazul în care bateria este în încărcare, stingerea și reaprinderea
-display-ului nu modifică starea Battery Check și nu permite trecerea
-automată către pagina următoare.
 
 ---
 

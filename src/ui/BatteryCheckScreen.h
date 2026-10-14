@@ -20,7 +20,7 @@
 //   - O atingere reaprinde pagina și resetează timerul.
 //   - Dacă Battery Manager raportează NORMAL și timeout-ul a expirat,
 //     semnalează către main.cpp că trebuie avansat către pagina următoare (START).
-//   - Dacă starea este LOW, CRITICAL sau CHARGING, rămâne în Battery Check
+//   - Dacă starea este LOW sau CRITICAL, rămâne în Battery Check
 //     și NU avansează automat.
 //
 // Politica este aplicată pe baza stării discrete (NORMAL/LOW/CRITICAL/CHARGING)

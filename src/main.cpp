@@ -158,9 +158,12 @@ void setup()
         }
         Serial.flush();
 
-        // BOOT -> Battery Check (prima pagina UI afisata)
+        // BOOT -> Battery Check (prima pagina UI afisata).
+        // navigator.begin() face intrarea formala in pagina: include
+        // batteryCheckScreen.init() si reseteaza timpii de activitate
+        // (altfel un setup > 5s ar consuma timeout-ul de 5s al paginii).
         batteryProvider.begin();
-        batteryCheckScreen.init();
+        navigator.begin();
     }
 }
 

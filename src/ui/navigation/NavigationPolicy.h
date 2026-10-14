@@ -13,8 +13,8 @@
 // main.cpp, conform src/ui_requirements.md):
 //   - gating START: doar NORMAL / CHARGING / CHARGED permit pornirea;
 //     LOW / CRITICAL blocheaza initierea unui test nou
-//   - avansare automata din Battery Check: doar NORMAL / CHARGED, si numai
-//     dupa expirarea timeout-ului (gestionat de PageNavigator)
+//   - avansare automata din Battery Check: NORMAL / CHARGING / CHARGED,
+//     si numai dupa expirarea timeout-ului (gestionat de PageNavigator)
 //   - CRITICAL forteaza intoarcerea la Battery Check din orice pagina
 //   - praguri nivel baterie pentru culoarea indicatorului (20% / 60%)
 //   - baterie complet incarcata (100% + charging) => verde continuu
@@ -38,10 +38,11 @@ namespace NavigationPolicy {
     }
 
     // Avansare automata Battery Check -> START la expirarea timeout-ului?
-    // (LOW, CRITICAL sau CHARGING blocheaza avansarea; vezi ui_requirements.md)
+    // Aceleasi stari care permit si initierea unui test (NORMAL, CHARGING,
+    // CHARGED); doar LOW si CRITICAL blocheaza avansarea.
     inline bool autoAdvanceAllowed(BatteryState s)
     {
-        return (s == BatteryState::NORMAL) || (s == BatteryState::CHARGED);
+        return startAllowed(s);
     }
 
     // CRITICAL forteaza navigarea la Battery Check din orice pagina.

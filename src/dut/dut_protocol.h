@@ -49,8 +49,8 @@ bool dut_exit_service(uint32_t timeoutMs = 1500);
 void dut_protocol_on_disconnect();
 
 // ---- PanelInfo: rezultatul ultimului handshake reusit ----------------------
-// Stare de sesiune (core0): completata la intrarea in pagina START prin
-// handshake si invalidata la deconectare. UI o citeste; nu o scrie.
+// Stare de sesiune (core0): completata la apasarea butonului START prin
+// handshake (mb_01) si invalidata la deconectare. UI o citeste; nu o scrie.
 struct DutPanelInfo {
     bool valid;                 // true doar dupa un handshake cu raspuns D_
     char identity[24];          // sirul brut "D_<hardware>_<versiune>"

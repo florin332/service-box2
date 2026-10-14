@@ -9,14 +9,15 @@
 //
 // Responsabilitati:
 //   - la intrare: citeste lista firmware-urilor COMPATIBILE din Firmware
-//     Repository (filtrate pe Panel ID din handshake-ul paginii START;
-//     fara Panel ID valid nu exista firmware compatibil)
+//     Repository (filtrate pe Panel ID din handshake-ul de la apasarea
+//     butonului START; fara Panel ID valid nu exista firmware compatibil)
 //   - selectia fisierului + butonul FLASH (activ doar cu DUT conectat si
 //     fisier selectat); pornirea fluxului prin dut_flash_start()
 //   - render() periodic: urmareste faza/progresul flasher-ului
 //   - la terminare: DONE/FAILED -> navigare la START (panelul reboot-eaza
 //     si iese singur din Service Mode; noul firmware este descoperit de
-//     handshake-ul paginii START, nu de o verificare aici - prompt1.md)
+//     handshake-ul paginii START, nu de o verificare aici - prompt1.md);
+//     BACK (fara flash) revine la DASHBOARD, cu sesiunea activa
 //
 // Comanda flash-ului este directa (dut_flash); navigatorul primeste de aici
 // doar cererea de BACK/iesire.
@@ -29,9 +30,10 @@ public:
     // Citeste starea initiala (fisiere + DUT) si deseneaza pagina completa.
     void init();
 
-    // Interactiune tactila. Returneaza true o data cand pagina cere iesirea
-    // (BACK la eliberare, sau automat la finalul unui flux de flash -
-    // navigatorul decide destinatia: START).
+    // Interactiune tactila. Returneaza true o data, la eliberarea butonului
+    // BACK (in afara unui flash in desfasurare). Finalul unui flux de flash
+    // este semnalat separat, prin flashFinished(). Destinatiile le decide
+    // navigatorul: BACK -> DASHBOARD; terminare flash -> START.
     bool update(int touchX, int touchY, bool isTouched);
 
     // Refresh dinamic (progres flash). Idempotent.

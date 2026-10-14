@@ -10,8 +10,6 @@
 #include "../graphic/UiTheme.h"
 #include "bsp/bsp_display.h"
 #include "bsp/bsp_touch.h"
-#include "dut/dut_host.h"
-#include "dut/dut_protocol.h"
 
 // ============================================================================
 // PageNavigator - implementare.
@@ -43,6 +41,11 @@ PageNavigator::PageNavigator(StartupScreen& startup,
     , _standbyBlinkOn(false)
     , _standbyIndicatorVisible(false)
 {
+}
+
+void PageNavigator::begin()
+{
+    enterPage(UiPageId::BATTERY_CHECK);
 }
 
 // ---------------------------------------------------------------------------
@@ -84,23 +87,12 @@ void PageNavigator::enterPage(UiPageId page)
             _standbyBlinkOn = false;
             break;
 
-        case UiPageId::START: {
+        case UiPageId::START:
             _startup.init();
-            // Handshake la intrare (prompt1.md: detect -> handshake ->
-            // identificare). Blocant max ~2.5s, doar daca DUT-ul raspunde.
-            // Rezultatul (PanelInfo) este pastrat in dut_protocol si citit
-            // de pagina Flash pentru filtrarea firmware-urilor.
-            if (dut_cdc_connected()) {
-                char identity[24];
-                if (dut_enter_service(identity, sizeof(identity))) {
-                    Serial.printf("[UI Navigation] START handshake: %s\n",
-                                  identity);
-                } else {
-                    Serial.println("[UI Navigation] START: handshake esuat");
-                }
-            }
+            // Fara handshake aici: mb_01 (SRV ENTER) pune DUT-ul in
+            // Service Mode, deci se trimite doar la apasarea efectiva a
+            // butonului START (vezi ServiceActions::handleStartConfirmed).
             break;
-        }
 
         case UiPageId::DASHBOARD:
             _dashboard.init();
@@ -208,7 +200,13 @@ void PageNavigator::updateBatteryCheckPage(int16_t x, int16_t y, bool touched)
     }
 
     // Redesenare (partiala/completa dupa flag) - anti-flicker e in screen.
-    _batteryCheck.render(_pageNeedsRender);
+    // In standby NU se redeseneaza pagina principala: altfel refresh-ul
+    // periodic al bateriei (la schimbarea procentului/incarcarii) ar
+    // reaprinde vizual pagina peste ecranul sters; in standby deseneaza
+    // doar clipitul indicatorului (mai sus).
+    if (_screenOn) {
+        _batteryCheck.render(_pageNeedsRender);
+    }
     _pageNeedsRender = false;
 
     // Timeout de 5 secunde fara atingere.
@@ -220,7 +218,7 @@ void PageNavigator::updateBatteryCheckPage(int16_t x, int16_t y, bool touched)
             Serial.println("[UI Navigation] Battery Check OK -> START");
             enterPage(UiPageId::START);
         } else {
-            // LOW, CRITICAL sau CHARGING: ramane in Battery Check (standby).
+            // LOW sau CRITICAL: ramane in Battery Check (standby).
             enterStandby();
         }
     }
@@ -303,15 +301,28 @@ void PageNavigator::updateDashboardPage(int16_t x, int16_t y, bool touched)
 
 void PageNavigator::updateFlashDutPage(int16_t x, int16_t y, bool touched)
 {
-    // Pagina este desenata la intrare (init); aici refresh dinamic +
-    // interactiune. BACK sau terminarea flash-ului duc la START (panelul
-    // reboot-eaza si iese singur din Service Mode; noul firmware este
-    // descoperit de handshake-ul paginii START - conform prompt1.md).
-    if (_flashDut.update(x, y, touched) || _flashDut.flashFinished()) {
-        Serial.println("[UI Navigation] Flash DUT -> START");
-        bsp_touch_wait_release();
+    // Terminarea unui flux de flash (DONE/FAILED): panelul reboot-eaza si
+    // iese singur din Service Mode, deci sesiunea nu mai este valida ->
+    // revenire la START; noul firmware este redescoperit de handshake-ul
+    // de la urmatoarea apasare START (conform prompt1.md).
+    // BACK_TO_START declanseaza SRV EXIT in Actions.
+    // Verificata inaintea lui update(): are prioritate fata de un BACK
+    // eliberat chiar in iteratia terminarii flash-ului.
+    if (_flashDut.flashFinished()) {
+        Serial.println("[UI Navigation] Flash DUT terminat -> START");
         enterPage(UiPageId::START);
         pushEvent(UiEvent::BACK_TO_START);
+        return;  // NU atinge _pageNeedsRender: apartine paginii START
+    }
+
+    // BACK: revenire la DASHBOARD (pagina parinte, de unde s-a deschis
+    // Flash DUT). Sesiunea de service ramane activa -> NU se emite
+    // BACK_TO_START (fara SRV EXIT catre DUT).
+    if (_flashDut.update(x, y, touched)) {
+        Serial.println("[UI Navigation] Flash DUT BACK -> DASHBOARD");
+        bsp_touch_wait_release();
+        enterPage(UiPageId::DASHBOARD);
+        return;
     }
 
     _flashDut.render();

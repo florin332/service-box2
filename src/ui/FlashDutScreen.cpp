@@ -62,7 +62,7 @@ void FlashDutScreen::init()
     _rowHeld = -1;
 
     // Lista firmware-urilor vine din Repository, filtrata pe Panel ID-ul
-    // din handshake-ul paginii START (regula: "<panelId>_*.uf2").
+    // din handshake-ul de la apasarea START (regula: "<panelId>_*.uf2").
     const DutPanelInfo& panel = dut_panel_info();
     if (panel.valid) {
         _model.fileCount = (uint8_t)fw_repo_list_compatible(
