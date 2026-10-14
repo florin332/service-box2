@@ -283,3 +283,125 @@ uint16_t bsp_sdcard_list_root(char names[][24], uint16_t maxNames)
     f_closedir(&dir);
     return count;
 }
+
+// ----------------------------------------------------------------------------
+// Listare filtrata pe extensie (folosita de pagina Flash DUT: "*.uf2")
+// ----------------------------------------------------------------------------
+
+static bool hasExtensionCaseInsensitive(const char* name, const char* ext)
+{
+    size_t nameLen = strlen(name);
+    size_t extLen  = strlen(ext);
+    if (nameLen <= extLen)
+        return false;
+
+    const char* suffix = name + nameLen - extLen;
+    for (size_t i = 0; i < extLen; i++)
+    {
+        char a = suffix[i];
+        char b = ext[i];
+        if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
+        if (b >= 'A' && b <= 'Z') b += 'a' - 'A';
+        if (a != b)
+            return false;
+    }
+    return true;
+}
+
+uint16_t bsp_sdcard_list_by_ext(const char* ext, char names[][24], uint16_t maxNames)
+{
+    if (!s_mounted || NULL == ext || NULL == names || 0 == maxNames)
+        return 0;
+
+    DIR dir;
+    FRESULT fr = f_opendir(&dir, "0:/");
+    if (FR_OK != fr)
+    {
+        Serial.printf("SD: f_opendir error: %s (%d)\n", FRESULT_str(fr), fr);
+        return 0;
+    }
+
+    uint16_t count = 0;
+    FILINFO fno;
+    while (count < maxNames)
+    {
+        fr = f_readdir(&dir, &fno);
+        if (FR_OK != fr || '\0' == fno.fname[0])
+            break;
+
+        if (fno.fattrib & AM_DIR)
+            continue;
+        if (!hasExtensionCaseInsensitive(fno.fname, ext))
+            continue;
+
+        strncpy(names[count], fno.fname, 23);
+        names[count][23] = '\0';
+        count++;
+    }
+
+    f_closedir(&dir);
+    return count;
+}
+
+// ----------------------------------------------------------------------------
+// Citire secventiala de fisier (stream pentru flasher-ul UF2)
+// ----------------------------------------------------------------------------
+
+static FIL s_readFil;
+static bool s_readOpen = false;
+
+bool bsp_sdcard_file_open(const char* name)
+{
+    if (!s_mounted || NULL == name)
+        return false;
+
+    bsp_sdcard_file_close();  // inchide orice deschidere anterioara
+
+    FRESULT fr = f_open(&s_readFil, name, FA_READ);
+    if (FR_OK != fr)
+    {
+        Serial.printf("SD: f_open(%s) read error: %s (%d)\n",
+                      name, FRESULT_str(fr), fr);
+        return false;
+    }
+
+    s_readOpen = true;
+    return true;
+}
+
+uint32_t bsp_sdcard_file_size()
+{
+    return s_readOpen ? (uint32_t)f_size(&s_readFil) : 0;
+}
+
+uint16_t bsp_sdcard_file_read(uint8_t* buf, uint16_t len)
+{
+    if (!s_readOpen || NULL == buf || 0 == len)
+        return 0;
+
+    UINT br = 0;
+    FRESULT fr = f_read(&s_readFil, buf, len, &br);
+    if (FR_OK != fr)
+    {
+        Serial.printf("SD: f_read error: %s (%d)\n", FRESULT_str(fr), fr);
+        return 0;
+    }
+    return (uint16_t)br;
+}
+
+void bsp_sdcard_file_close()
+{
+    if (!s_readOpen)
+        return;
+
+    f_close(&s_readFil);
+    s_readOpen = false;
+}
+
+void bsp_sdcard_file_rewind()
+{
+    if (!s_readOpen)
+        return;
+
+    f_lseek(&s_readFil, 0);
+}

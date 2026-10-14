@@ -1,6 +1,9 @@
 #include "ServiceActions.h"
 #include "battery/IBatteryProvider.h"
 
+#include "dut/dut_host.h"
+#include "dut/dut_protocol.h"
+
 // ============================================================================
 // ServiceActions - implementare.
 //
@@ -23,6 +26,10 @@ ActionOutcome ServiceActions::execute(UiEvent ev)
         case UiEvent::SD_CHECK_REQUESTED:
             // Navigare catre pagina SD Check: nimic de executat in Actions.
             return { ActionResult::OK, "sd check page" };
+        case UiEvent::FLASH_DUT_REQUESTED:
+            // Navigare catre pagina Flash DUT: flash-ul este condus direct
+            // de FlashDutScreen prin dut_flash (vezi src/dut).
+            return { ActionResult::OK, "flash dut page" };
         case UiEvent::NONE:
         default:
             return { ActionResult::OK, "none" };
@@ -38,7 +45,9 @@ void ServiceActions::update()
 
 ActionOutcome ServiceActions::handleStartConfirmed()
 {
-    // Politica de gating e deja aplicata in Navigation; aici doar executam.
+    // Handshake-ul (mb_01) se face la INTRAREA in pagina START, nu aici -
+    // la acest punct DUT-ul este deja in Service Mode si PanelInfo este
+    // disponibil (vezi PageNavigator::enterPage).
     // TODO(pas viitor): pornire secventa teste panouri ascensoare.
     _testActive = true;
     Serial.println("[Actions] START_CONFIRMED -> secventa teste (placeholder)");
@@ -60,6 +69,14 @@ ActionOutcome ServiceActions::handleForcedLowPower()
 
 ActionOutcome ServiceActions::handleBackToStart()
 {
-    // Curatenie la iesire din dashboard (deocamdata: nimic de facut).
+    // SVC OUT (sau orice revenire la START): DUT iese din Service Mode
+    // ("mb_00" = alias SRV EXIT) si revine la functionarea normala.
+    if (dut_cdc_connected()) {
+        if (dut_exit_service()) {
+            Serial.println("[Actions] DUT a iesit din service mode");
+        } else {
+            Serial.println("[Actions] DUT: mb_00 fara ACK");
+        }
+    }
     return { ActionResult::OK, "back to start" };
 }

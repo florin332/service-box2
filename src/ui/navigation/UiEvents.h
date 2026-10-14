@@ -17,6 +17,7 @@ enum class UiEvent : uint8_t {
     FORCED_LOW_POWER,   // baterie CRITICAL: nav fortata la Battery Check
                         // (Actions poate opri testele in desfasurare)
     SD_CHECK_REQUESTED, // utilizatorul a deschis pagina SD Check
+    FLASH_DUT_REQUESTED, // utilizatorul a deschis pagina Flash DUT
 };
 
 #endif // UI_EVENTS_H

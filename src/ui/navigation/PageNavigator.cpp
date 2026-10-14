@@ -3,36 +3,40 @@
 #include "../StartupScreen.h"
 #include "../BatteryCheckScreen.h"
 #include "../SdCheckScreen.h"
+#include "../DashboardScreen.h"
+#include "../FlashDutScreen.h"
 #include "NavigationPolicy.h"
 #include "../graphic/UiLayout.h"
 #include "../graphic/UiTheme.h"
 #include "bsp/bsp_display.h"
 #include "bsp/bsp_touch.h"
-#include "bsp/bsp_ina219.h"
+#include "dut/dut_host.h"
+#include "dut/dut_protocol.h"
 
 // ============================================================================
 // PageNavigator - implementare.
 //
-// Desenarea dashboard-ului este PROXIM aici (placeholderul din main.cpp,
-// acum cu geometrie derivata din dimensiunile display-ului). Cand va fi
-// promovat la pagina completa, va primi DashboardView in ui/graphic.
+// Dashboard-ul si pagina Flash DUT sunt screen-uri proprii (DashboardScreen /
+// FlashDutScreen); navigatorul doar deleaga inputul si aplica tranzitiile.
 // ============================================================================
 
 PageNavigator::PageNavigator(StartupScreen& startup,
                              BatteryCheckScreen& batteryCheck,
                              SdCheckScreen& sdCheck,
+                             DashboardScreen& dashboard,
+                             FlashDutScreen& flashDut,
                              IBatteryProvider& battery)
     : _startup(startup)
     , _batteryCheck(batteryCheck)
     , _sdCheck(sdCheck)
+    , _dashboard(dashboard)
+    , _flashDut(flashDut)
     , _battery(battery)
     , _page(UiPageId::BATTERY_CHECK)
     , _pageNeedsRender(true)
+    , _pageEnteredMs(0)
     , _evHead(0)
     , _evTail(0)
-    , _dashboardBaseDrawn(false)
-    , _dashboardLastRefreshMs(0)
-    , _backWasHeld(false)
     , _screenOn(true)
     , _lastActivityMs(0)
     , _standbyBlinkTimerMs(0)
@@ -69,6 +73,7 @@ void PageNavigator::enterPage(UiPageId page)
 {
     _page = page;
     _pageNeedsRender = true;
+    _pageEnteredMs = millis();  // incepe perioada de stationare (touch ignorat)
 
     switch (page) {
         case UiPageId::BATTERY_CHECK:
@@ -79,20 +84,39 @@ void PageNavigator::enterPage(UiPageId page)
             _standbyBlinkOn = false;
             break;
 
-        case UiPageId::START:
+        case UiPageId::START: {
             _startup.init();
+            // Handshake la intrare (prompt1.md: detect -> handshake ->
+            // identificare). Blocant max ~2.5s, doar daca DUT-ul raspunde.
+            // Rezultatul (PanelInfo) este pastrat in dut_protocol si citit
+            // de pagina Flash pentru filtrarea firmware-urilor.
+            if (dut_cdc_connected()) {
+                char identity[24];
+                if (dut_enter_service(identity, sizeof(identity))) {
+                    Serial.printf("[UI Navigation] START handshake: %s\n",
+                                  identity);
+                } else {
+                    Serial.println("[UI Navigation] START: handshake esuat");
+                }
+            }
             break;
+        }
 
         case UiPageId::DASHBOARD:
-            _dashboardBaseDrawn = false;
-            _dashboardLastRefreshMs = millis();
-            _backWasHeld = false;
+            _dashboard.init();
+            _pageNeedsRender = false;  // init() deseneaza complet
             break;
 
         case UiPageId::SD_CHECK:
             // Snapshot-ul SD este citit si desenat aici, la intrarea
             // in pagina (init contine si desenarea completa).
             _sdCheck.init();
+            _pageNeedsRender = false;
+            break;
+
+        case UiPageId::FLASH_DUT:
+            // Lista .uf2 + starea DUT sunt citite si desenate la intrare.
+            _flashDut.init();
             _pageNeedsRender = false;
             break;
     }
@@ -239,122 +263,59 @@ void PageNavigator::updateSdCheckPage(int16_t x, int16_t y, bool touched)
     }
 }
 
-bool PageNavigator::dashboardBackHit(int16_t x, int16_t y, bool touched)
-{
-    // Geometrie buton BACK derivata din display (aceeasi ca la desenare):
-    // (50,270,140,35) pe 240x320 -> (208,844,583,109) miimi
-    UiLayout layout(bsp_display_width(), bsp_display_height());
-    UiRect btn = layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                     208, 844, 583, 109);
-
-    bool inBtn = (x >= btn.x && x <= btn.x + btn.w &&
-                  y >= btn.y && y <= btn.y + btn.h);
-
-    if (touched && inBtn) {
-        _backWasHeld = true;
-    } else if (!touched && _backWasHeld) {
-        _backWasHeld = false;
-        return true; // confirmare la eliberare
-    }
-    return false;
-}
-
 void PageNavigator::updateDashboardPage(int16_t x, int16_t y, bool touched)
 {
     if (_pageNeedsRender) {
-        // Desenare initiala (baza + valori)
-        UiLayout layout(bsp_display_width(), bsp_display_height());
-        Adafruit_GFX* tft = bsp_display_gfx();
-
-        tft->fillScreen(UiTheme::COLOR_BACKGROUND);
-
-        uint8_t sTitle = UiTheme::textSizeScaled(layout.height(), 3);
-        tft->setTextColor(UiTheme::COLOR_TEXT_MAIN);
-        tft->setTextSize(sTitle);
-        tft->setCursor(layout.centerTextX(sTitle, strlen("DASHBOARD")),
-                       layout.py(141));
-        tft->print("DASHBOARD");
-
-        uint8_t sSub = UiTheme::textSizeScaled(layout.height(), 1);
-        tft->setTextColor(UiTheme::COLOR_TEXT_MUTED);
-        tft->setTextSize(sSub);
-        tft->setCursor(layout.centerTextX(sSub, strlen("INA219 (provisional)")),
-                       layout.py(297));
-        tft->print("INA219 (provisional)");
-
-        // Buton BACK
-        UiRect btn = layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                         208, 844, 583, 109);
-        int16_t radius = layout.scaleMin(25);
-        tft->fillRoundRect(btn.x, btn.y, btn.w, btn.h, radius, UiTheme::COLOR_BTN_BASE);
-        tft->drawRoundRect(btn.x, btn.y, btn.w, btn.h, radius, UiTheme::COLOR_TEXT_MAIN);
-
-        uint8_t sBtn = UiTheme::textSizeScaled(layout.height(), 2);
-        tft->setTextColor(UiTheme::COLOR_TEXT_MAIN);
-        tft->setTextSize(sBtn);
-        tft->setCursor(btn.x + (btn.w - 4 * 6 * sBtn) / 2,
-                       btn.y + (btn.h - 8 * sBtn) / 2);
-        tft->print("BACK");
-
-        _dashboardBaseDrawn = true;
-        dashboardUpdate(); // prima afisare a valorilor imediat
-
+        _dashboard.render(true);
         _pageNeedsRender = false;
-        Serial.println("[UI Navigation] Dashboard afisat.");
     }
 
-    dashboardUpdate();
+    // Telemetria INA219 este reimprospatata intern, rate-limited.
+    _dashboard.render();
 
-    if (dashboardBackHit(x, y, touched)) {
-        Serial.println("[UI Navigation] BACK -> START");
+    switch (_dashboard.update(x, y, touched)) {
+        case DashboardScreen::NavRequest::FLASH:
+            Serial.println("[UI Navigation] FLASH -> FLASH_DUT");
+            enterPage(UiPageId::FLASH_DUT);
+            pushEvent(UiEvent::FLASH_DUT_REQUESTED);
+            break;
+
+        case DashboardScreen::NavRequest::SVC_OUT:
+            Serial.println("[UI Navigation] SVC OUT -> START");
+            bsp_touch_wait_release();
+            enterPage(UiPageId::START);
+            pushEvent(UiEvent::BACK_TO_START);
+            break;
+
+        case DashboardScreen::NavRequest::TEST:
+            Serial.println("[UI Navigation] TEST (placeholder - pas viitor)");
+            break;
+
+        case DashboardScreen::NavRequest::INFO:
+            Serial.println("[UI Navigation] INFO (placeholder - pas viitor)");
+            break;
+
+        case DashboardScreen::NavRequest::NONE:
+        default:
+            break;
+    }
+}
+
+void PageNavigator::updateFlashDutPage(int16_t x, int16_t y, bool touched)
+{
+    // Pagina este desenata la intrare (init); aici refresh dinamic +
+    // interactiune. BACK sau terminarea flash-ului duc la START (panelul
+    // reboot-eaza si iese singur din Service Mode; noul firmware este
+    // descoperit de handshake-ul paginii START - conform prompt1.md).
+    if (_flashDut.update(x, y, touched) || _flashDut.flashFinished()) {
+        Serial.println("[UI Navigation] Flash DUT -> START");
         bsp_touch_wait_release();
         enterPage(UiPageId::START);
         pushEvent(UiEvent::BACK_TO_START);
     }
-}
 
-// Refresh periodic valori INA219 cat timp dashboard-ul este activ.
-void PageNavigator::dashboardUpdate()
-{
-    if (!_dashboardBaseDrawn) return;
-
-    unsigned long now = millis();
-    if (now - _dashboardLastRefreshMs < DASHBOARD_REFRESH_MS) return;
-    _dashboardLastRefreshMs = now;
-
-    UiLayout layout(bsp_display_width(), bsp_display_height());
-    Adafruit_GFX* tft = bsp_display_gfx();
-
-    // Redesenare doar a zonei valorilor (fara flicker pe restul ecranului)
-    UiRect zone = layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                      83, 359, 833, 125);
-    tft->fillRect(zone.x, zone.y, zone.w, zone.h, UiTheme::COLOR_BACKGROUND);
-
-#if defined(SERVICEBOX_WAVESHARE)
-    ina219_data_t data;
-    bsp_ina219_read(&data);
-
-    uint8_t sVal = UiTheme::textSizeScaled(layout.height(), 2);
-    tft->setTextSize(sVal);
-
-    tft->setTextColor(UiTheme::COLOR_YELLOW, UiTheme::COLOR_BACKGROUND);
-    tft->setCursor(zone.x, layout.py(359));
-    tft->print("V: ");
-    tft->print(data.bus_voltage_V, 2);
-    tft->print(" V  ");
-
-    tft->setTextColor(UiTheme::COLOR_GREEN, UiTheme::COLOR_BACKGROUND);
-    tft->setCursor(zone.x, layout.py(431));
-    tft->print("I: ");
-    tft->print(data.current_mA, 1);
-    tft->print(" mA  ");
-#else
-    uint8_t sVal = UiTheme::textSizeScaled(layout.height(), 1);
-    tft->setTextSize(sVal);
-    tft->setTextColor(UiTheme::COLOR_TEXT_MUTED, UiTheme::COLOR_BACKGROUND);
-    tft->setCursor(zone.x, layout.py(359));
-    tft->print("INA219: n/a pe acest target");
-#endif
+    _flashDut.render();
+    _pageNeedsRender = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -371,18 +332,28 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
         pushEvent(UiEvent::FORCED_LOW_POWER);
     }
 
+    // Timp minim de stationare: touch-ul este ignorat in primele
+    // PAGE_MIN_DWELL_MS dupa intrarea pe pagina, ca sa nu fie activate
+    // din greseala butoanele paginii noi care se suprapun cu cele de pe
+    // pagina anterioara. Randarea si logica automata continua normal.
+    bool touchAllowed = (millis() - _pageEnteredMs >= PAGE_MIN_DWELL_MS);
+    bool effectiveTouched = touched && touchAllowed;
+
     switch (_page) {
         case UiPageId::BATTERY_CHECK:
-            updateBatteryCheckPage(touchX, touchY, touched);
+            updateBatteryCheckPage(touchX, touchY, effectiveTouched);
             break;
         case UiPageId::START:
-            updateStartPage(touchX, touchY, touched);
+            updateStartPage(touchX, touchY, effectiveTouched);
             break;
         case UiPageId::DASHBOARD:
-            updateDashboardPage(touchX, touchY, touched);
+            updateDashboardPage(touchX, touchY, effectiveTouched);
             break;
         case UiPageId::SD_CHECK:
-            updateSdCheckPage(touchX, touchY, touched);
+            updateSdCheckPage(touchX, touchY, effectiveTouched);
+            break;
+        case UiPageId::FLASH_DUT:
+            updateFlashDutPage(touchX, touchY, effectiveTouched);
             break;
     }
 }

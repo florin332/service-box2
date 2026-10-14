@@ -27,10 +27,15 @@
 #include "ui/StartupScreen.h"
 #include "ui/BatteryCheckScreen.h"
 #include "ui/SdCheckScreen.h"
+#include "ui/DashboardScreen.h"
+#include "ui/FlashDutScreen.h"
 #include "ui/navigation/PageNavigator.h"
 #include "ui/navigation/UiEvents.h"
 #include "ui/actions/ServiceActions.h"
 #include "ui/calibration/TouchCalibration.h"
+
+#include "dut/dut_host.h"
+#include "dut/dut_flash.h"
 
 // ============================================================================
 // Instante globale
@@ -46,10 +51,12 @@ static BspBatteryProvider batteryProvider;
 static BatteryCheckScreen batteryCheckScreen(&activeDisplay, batteryProvider);
 static StartupScreen      startupScreen(&activeDisplay, batteryProvider);
 static SdCheckScreen      sdCheckScreen(&activeDisplay);
+static DashboardScreen    dashboardScreen(&activeDisplay);
+static FlashDutScreen     flashDutScreen(&activeDisplay);
 
 // Navigator de pagini (masina de stari + reguli)
 static PageNavigator navigator(startupScreen, batteryCheckScreen, sdCheckScreen,
-                               batteryProvider);
+                               dashboardScreen, flashDutScreen, batteryProvider);
 
 // Actiuni (executia efectiva svc box)
 static ServiceActions actions(batteryProvider);
@@ -213,4 +220,28 @@ void loop()
 
     // Pump periodic pentru actiuni cu durata (placeholder pentru pipeline teste)
     actions.update();
+
+    // Masina de stari a flasher-ului DUT (no-op cand nu e activa; pe
+    // build-ul Marble este stub).
+    dut_flash_update();
 }
+
+// ============================================================================
+// Core1: host USB pe PIO (GP0/GP1) - doar Waveshare.
+//
+// Doar USBHost.task() ruleaza aici (prelucrarea bit-bang PIO ramane pe core1,
+// core0 e liber pentru UI). Protocolul serial si scrierea MSC sunt apelate
+// din contextul loop() de pe core0 - pattern-ul DualRole din Adafruit
+// TinyUSB.
+// ============================================================================
+#if defined(SERVICEBOX_WAVESHARE)
+void setup1()
+{
+    dut_host_core1_setup();
+}
+
+void loop1()
+{
+    dut_host_core1_loop();
+}
+#endif

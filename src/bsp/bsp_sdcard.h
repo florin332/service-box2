@@ -52,4 +52,19 @@ bool bsp_sdcard_self_test();
 // Returneaza 0 daca cardul nu este montat sau la eroare.
 uint16_t bsp_sdcard_list_root(char names[][24], uint16_t maxNames);
 
+// Listeaza doar fisierele cu o anumita extensie (ex. ".uf2"), comparatie
+// case-insensitive. Restul contractului ca la bsp_sdcard_list_root().
+uint16_t bsp_sdcard_list_by_ext(const char* ext, char names[][24], uint16_t maxNames);
+
+// Citire secventiala de fisier (un singur fisier deschis o data; apelat
+// exclusiv din contextul care detine FatFS - core0).
+// bsp_sdcard_file_open deschide in citire si returneaza false la eroare.
+bool     bsp_sdcard_file_open(const char* name);
+uint32_t bsp_sdcard_file_size();            // dimensiunea fisierului deschis
+// Citeste max `len` octeti in `buf`; returneaza cati s-au citit efectiv
+// (0 = sfarsit de fisier sau eroare).
+uint16_t bsp_sdcard_file_read(uint8_t* buf, uint16_t len);
+void     bsp_sdcard_file_close();           // sigur si fara fisier deschis
+void     bsp_sdcard_file_rewind();          // repornire citire de la 0
+
 #endif // BSP_SDCARD_H

@@ -219,15 +219,36 @@ Status: **TESTED - OK**
 
 - [X] RECALIB_BUTTON = GP29  (INPUT_PULLUP, activ LOW; ținut 2s -> recalibrare)
 
-## 2.6 UART / RS485
+## 2.6 USB Host PIO (flash DUT)
 
 Status: **NOT TESTED**
 
-Conform pinout-ului oficial al placii:
+Host USB Full Speed bit-bang prin Pico-PIO-USB (Adafruit TinyUSB dual-role:
+device pe controllerul nativ + host pe PIO). Folosit pentru controlul si
+flash-uirea panoului DUT (Marble Pico, `panou_duplex`), conectat prin
+cablu de 3 fire (fara VBUS - DUT-ul este alimentat separat; enumerarea
+fara VBUS a fost validata pe banc).
 
-- [ ] TX = GP0
-- [ ] RX = GP1
-- [ ] Baud rate = TBD
+- [ ] USB_DP = GP0 (D+)
+- [ ] USB_DM = GP1 (D-)
+- [ ] Rezistente serie ~22-27 Ω pe D+/D- (cablaj extern)
+- [ ] Pull-down 15 kΩ pe D+ si D- la mufa host (obligatorii pt. detectie)
+
+Constrangeri de resurse:
+
+- **clk_sys = 144 MHz** (multiplu de 12 MHz, cerinta Pico-PIO-USB;
+  default-ul de 150 MHz al rpipico2 nu este valid).
+- **PIO1** integral (3 SM: TX/RX/EOP); PIO0 ramane pentru SDIO (card SD).
+- **DMA channel 9** pentru TX PIO-USB.
+- `USBHost.task()` ruleaza pe **core1** (setup1/loop1); protocolul serial
+  (CDC) si scrierea .uf2 (MSC raw, sectoare cu magic UF2) ruleaza pe core0.
+
+Driver: [src/dut/dut_host.h](src/dut/dut_host.h) +
+[src/dut/dut_flash.h](src/dut/dut_flash.h). Protocolul serial al DUT-ului:
+`panou_duplex/src/service_commands.md` (SRV ENTER / SRV BOOTSEL).
+
+**Nota:** UART/RS485 (fosta alocare GP0/GP1) nu exista pe aceasta placa;
+perechea GP0/GP1 este alocata definitiv host-ului USB.
 
 ## 2.7 Monitor curent — INA219
 
@@ -333,7 +354,7 @@ Status:
 - [ ] SD Card (SDIO, GP19-GP24)
 - [ ] Battery measurement
 - [ ] Charging detection
-- [ ] RS485
+- [ ] USB Host PIO (GP0=D+, GP1=D-; flash DUT)
 - [ ] INA219 (monitor curent, I2C 0x40)
 - [x] LCD + Touch
 - [ ] LCD + SD
