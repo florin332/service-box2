@@ -18,6 +18,9 @@ class FlashDutScreen;
 //   - pagina curenta + tranzitiile (conform regulilor din NavigationPolicy)
 //   - timeout/standby Battery Check (5s fara touch -> standby; touch ->
 //     reaprinde si reseteaza timerul; clipitul indicatorului in standby)
+//   - standby CHARGING (10s fara touch, din Battery Check sau START:
+//     ecran negru + punct verde clipitor; atingerea revine la pagina
+//     activa fara a executa comenzi)
 //   - avansarea automata Battery Check -> START (doar daca politica permite)
 //   - CRITICAL forteaza Battery Check din orice pagina (+ eveniment
 //     FORCED_LOW_POWER catre Actions)
@@ -84,13 +87,19 @@ private:
     unsigned long _standbyBlinkTimerMs;
     bool          _standbyBlinkOn;
     bool          _standbyIndicatorVisible;
+    // true cand standby-ul activ este cel de CHARGING (ecran negru +
+    // punct verde); false pentru standby-ul LOW/CRITICAL (indicator +
+    // tensiune) din Battery Check.
+    bool          _standbyCharging;
 
     static constexpr unsigned long SCREEN_ON_TIMEOUT_MS  = 5000UL;
+    // Inactivitate in CHARGING (Battery Check / START) pana la standby.
+    static constexpr unsigned long CHARGING_STANDBY_MS   = 10000UL;
     static constexpr unsigned long STANDBY_BLINK_OFF_MS  = 2000UL;
     static constexpr unsigned long STANDBY_BLINK_ON_MS   = 1000UL;
     // Timp minim de stationare pe o pagina: touch-ul este ignorat in
     // primele 1.5s dupa tranzitie (protectie la suprapunerea butoanelor).
-    static constexpr unsigned long PAGE_MIN_DWELL_MS     = 1500UL;
+    static constexpr unsigned long PAGE_MIN_DWELL_MS     = 1000UL;
 
     void enterPage(UiPageId page);
     void pushEvent(UiEvent ev);
@@ -102,6 +111,7 @@ private:
     void updateFlashDutPage(int16_t x, int16_t y, bool touched);
 
     void enterStandby();
+    void enterChargingStandby();
     void wakeFromStandby();
     bool updateStandbyBlinkPhase(); // true cand s-a schimbat faza de clipit
 };

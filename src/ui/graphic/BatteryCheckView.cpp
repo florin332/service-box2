@@ -13,6 +13,7 @@
 BatteryCheckView::BatteryCheckView(Adafruit_GFX* gfx)
     : _gfx(gfx)
     , _layoutReady(false)
+    , _chargingStandbyActive(false)
     , _layout(0, 0)
     , _indicatorRadius(0)
     , _indicatorX(0)
@@ -37,6 +38,7 @@ void BatteryCheckView::renderMain(const BatteryCheckViewModel& m)
 {
     ensureLayout();
 
+    _chargingStandbyActive = false;
     _gfx->fillScreen(UiTheme::COLOR_BACKGROUND);
 
     // Titlu: BATTERY LEVEL (centrat)
@@ -64,6 +66,41 @@ void BatteryCheckView::renderMain(const BatteryCheckViewModel& m)
         _gfx->setTextSize(sCharge);
         _gfx->setCursor(_layout.centerTextX(sCharge, strlen(m.chargeText)),
                         _layout.py(625));
+        _gfx->print(m.chargeText);
+    }
+
+    renderIndicator(m);
+}
+
+void BatteryCheckView::renderUpdate(const BatteryCheckViewModel& m)
+{
+    ensureLayout();
+
+    const uint16_t w = _gfx->width();
+
+    // Zona tensiunii (y=406 per-mie): sterge banda si rescrie textul.
+    uint8_t sVolt = UiTheme::textSizeScaled(_layout.height(), 4);
+    int16_t voltY = _layout.py(406);
+    _gfx->fillRect(0, voltY, w, 8 * sVolt, UiTheme::COLOR_BACKGROUND);
+
+    char voltStr[12];
+    snprintf(voltStr, sizeof(voltStr), "%.2f V", m.voltageV);
+    _gfx->setTextColor(UiTheme::COLOR_TEXT_MAIN);
+    _gfx->setTextSize(sVolt);
+    _gfx->setCursor(_layout.centerTextX(sVolt, strlen(voltStr)), voltY);
+    _gfx->print(voltStr);
+
+    // Zona starii de incarcare (y=625 per-mie): sterge mereu banda,
+    // rescrie textul doar daca exista (tranzitie CHARGING <-> ascuns).
+    uint8_t sCharge = UiTheme::textSizeScaled(_layout.height(), 2);
+    int16_t chargeY = _layout.py(625);
+    _gfx->fillRect(0, chargeY, w, 8 * sCharge, UiTheme::COLOR_BACKGROUND);
+
+    if (m.chargeText != nullptr) {
+        _gfx->setTextColor(m.chargeColor);
+        _gfx->setTextSize(sCharge);
+        _gfx->setCursor(_layout.centerTextX(sCharge, strlen(m.chargeText)),
+                        chargeY);
         _gfx->print(m.chargeText);
     }
 
@@ -111,7 +148,27 @@ void BatteryCheckView::renderStandby(const BatteryCheckViewModel& m)
     _gfx->print(voltStr);
 }
 
+void BatteryCheckView::renderChargingStandby(bool dotVisible)
+{
+    ensureLayout();
+
+    // Prima intrare in standby: sterge tot ecranul (ramane negru).
+    if (!_chargingStandbyActive) {
+        _gfx->fillScreen(UiTheme::COLOR_BACKGROUND);
+        _chargingStandbyActive = true;
+    }
+
+    // Punct verde centrat, redesenat doar la schimbarea fazei de clipit.
+    int16_t cx = _gfx->width() / 2;
+    int16_t cy = _gfx->height() / 2;
+    _gfx->fillCircle(cx, cy, _indicatorRadius + 2, UiTheme::COLOR_BACKGROUND);
+    if (dotVisible) {
+        _gfx->fillCircle(cx, cy, _indicatorRadius, UiTheme::COLOR_GREEN);
+    }
+}
+
 void BatteryCheckView::clearAll()
 {
+    _chargingStandbyActive = false;
     _gfx->fillScreen(UiTheme::COLOR_BACKGROUND);
 }

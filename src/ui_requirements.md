@@ -77,11 +77,14 @@ CHARGING
 
 În această stare:
 
-- la expirarea timeout-ului de 5 secunde fără atingere se avansează
-  automat la pagina următoare (START), la fel ca în funcționarea
-  normală;
-- atingerea ecranului resetează temporizarea de 5 secunde;
-- atingerea ecranului nu execută nicio comandă și nu există butoane;
+- NU există avansare automată la expirarea timeout-ului: pagina rămâne
+  afișată cât timp încărcarea este activă;
+- avansarea la pagina următoare (START) se face DOAR manual, la
+  atingerea ecranului;
+- după 10 secunde fără atingere se intră în standby CHARGING: ecran
+  negru cu un punct verde care clipește; o atingere trezește display-ul
+  și revine la pagina activă (aceeași regulă se aplică și pe pagina
+  START cât timp bateria este în CHARGING);
 - pagina afișează textul CHARGING cât timp încărcarea este activă;
 - punctul indicator își schimbă/pulsează culoarea în funcție de nivelul
   bateriei:
@@ -99,8 +102,11 @@ reactivarea ecranului.
 
 După 5 secunde fără atingerea ecranului:
 
-- dacă avansarea automată este permisă (NORMAL / CHARGING / CHARGED),
+- dacă avansarea automată este permisă (NORMAL / CHARGED),
   se trece la pagina următoare (START);
+- în CHARGING pagina rămâne afișată și așteaptă atingerea ecranului
+  (avans manual); după 10 secunde fără atingere intră în standby
+  CHARGING (ecran negru + punct verde clipitor);
 - dacă avansarea automată este blocată (LOW / CRITICAL):
   - partea grafică principală a paginii se stinge;
   - rămâne activ doar punctul indicator al bateriei;

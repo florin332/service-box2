@@ -40,6 +40,7 @@ PageNavigator::PageNavigator(StartupScreen& startup,
     , _standbyBlinkTimerMs(0)
     , _standbyBlinkOn(false)
     , _standbyIndicatorVisible(false)
+    , _standbyCharging(false)
 {
 }
 
@@ -89,6 +90,8 @@ void PageNavigator::enterPage(UiPageId page)
 
         case UiPageId::START:
             _startup.init();
+            _screenOn = true;
+            _lastActivityMs = millis();  // standby CHARGING porneste de aici
             // Fara handshake aici: mb_01 (SRV ENTER) pune DUT-ul in
             // Service Mode, deci se trimite doar la apasarea efectiva a
             // butonului START (vezi ServiceActions::handleStartConfirmed).
@@ -121,6 +124,7 @@ void PageNavigator::enterPage(UiPageId page)
 void PageNavigator::enterStandby()
 {
     _screenOn = false;
+    _standbyCharging = false;
     _batteryCheck.view().clearAll();
 
     _standbyBlinkTimerMs = millis();
@@ -133,10 +137,30 @@ void PageNavigator::enterStandby()
     _batteryCheck.view().renderStandby(m);
 }
 
+// Standby CHARGING: ecran negru + punct verde clipitor (din Battery
+// Check sau START, dupa 10s fara atingere). Pagina curenta NU se
+// schimba: la atingere se revine exact la ea.
+void PageNavigator::enterChargingStandby()
+{
+    Serial.println("[UI Navigation] CHARGING inactiv -> standby");
+    _screenOn = false;
+    _standbyCharging = true;
+
+    _standbyBlinkTimerMs = millis();
+    _standbyBlinkOn = true;
+    _standbyIndicatorVisible = true;
+
+    _batteryCheck.view().renderChargingStandby(true);
+}
+
 void PageNavigator::wakeFromStandby()
 {
     _screenOn = true;
-    _batteryCheck.render(true); // redesenare completa a paginii
+    _lastActivityMs = millis();
+    _batteryCheck.view().clearAll(); // reseteaza si flag-ul de standby CHARGING
+    _pageNeedsRender = true;       // pagina activa se redeseneaza complet
+    _pageEnteredMs = millis();     // dwell: touch-ul curent nu ajunge la butoane
+    bsp_touch_wait_release();      // nu propagam atingerea care a trezit ecranul
 }
 
 // Actualizeaza faza de clipit; true cand vizibilitatea s-a schimbat.
@@ -180,43 +204,38 @@ void PageNavigator::updateBatteryCheckPage(int16_t x, int16_t y, bool touched)
 
     unsigned long now = millis();
 
-    // Atingerea: reaprinde pagina din standby si reseteaza timerul.
-    // NU este o comanda si nu modifica starea bateriei.
+    // Atingerea reseteaza timerul de inactivitate. Exceptie CHARGING:
+    // atingerea este AVANS MANUAL catre START (in aceasta stare nu
+    // exista avansare automata la timeout). NU modifica starea bateriei.
+    // (In standby nu se ajunge aici: update() intercepteaza mai devreme.)
     if (touched) {
-        if (!_screenOn) {
-            wakeFromStandby();
+        if (_battery.getState() == BatteryState::CHARGING) {
+            Serial.println("[UI Navigation] CHARGING + atingere -> START (avans manual)");
+            bsp_touch_wait_release();
+            enterPage(UiPageId::START);
+            return;
         }
         _lastActivityMs = now;
     }
 
-    // In standby: clipitul avanseaza aici (timing), nu in render().
-    if (!_screenOn) {
-        if (updateStandbyBlinkPhase()) {
-            BatteryCheckViewModel m;
-            _batteryCheck.fillModel(m);
-            m.standbyIndicatorOn = _standbyIndicatorVisible;
-            _batteryCheck.view().renderStandby(m);
-        }
-    }
-
     // Redesenare (partiala/completa dupa flag) - anti-flicker e in screen.
-    // In standby NU se redeseneaza pagina principala: altfel refresh-ul
-    // periodic al bateriei (la schimbarea procentului/incarcarii) ar
-    // reaprinde vizual pagina peste ecranul sters; in standby deseneaza
-    // doar clipitul indicatorului (mai sus).
-    if (_screenOn) {
-        _batteryCheck.render(_pageNeedsRender);
-    }
+    _batteryCheck.render(_pageNeedsRender);
     _pageNeedsRender = false;
 
     // Timeout de 5 secunde fara atingere.
-    if (_screenOn && (now - _lastActivityMs >= SCREEN_ON_TIMEOUT_MS)) {
+    if (now - _lastActivityMs >= SCREEN_ON_TIMEOUT_MS) {
         BatteryState state = _battery.getState();
 
         if (NavigationPolicy::autoAdvanceAllowed(state)) {
             // Nivel suficient sau incarcare finalizata: avansare la START.
             Serial.println("[UI Navigation] Battery Check OK -> START");
             enterPage(UiPageId::START);
+        } else if (state == BatteryState::CHARGING) {
+            // CHARGING: fara avansare automata; dupa 10s fara atingere
+            // intra in standby (ecran negru + punct verde clipitor).
+            if (now - _lastActivityMs >= CHARGING_STANDBY_MS) {
+                enterChargingStandby();
+            }
         } else {
             // LOW sau CRITICAL: ramane in Battery Check (standby).
             enterStandby();
@@ -226,6 +245,17 @@ void PageNavigator::updateBatteryCheckPage(int16_t x, int16_t y, bool touched)
 
 void PageNavigator::updateStartPage(int16_t x, int16_t y, bool touched)
 {
+    // In CHARGING: 10s fara atingere -> standby (ecran negru + punct
+    // verde clipitor); orice atingere reseteaza timerul de inactivitate.
+    if (touched) {
+        _lastActivityMs = millis();
+    }
+    if (_battery.getState() == BatteryState::CHARGING &&
+        millis() - _lastActivityMs >= CHARGING_STANDBY_MS) {
+        enterChargingStandby();
+        return;
+    }
+
     if (_pageNeedsRender) {
         _startup.render(true);
         _pageNeedsRender = false;
@@ -349,6 +379,26 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
     // pagina anterioara. Randarea si logica automata continua normal.
     bool touchAllowed = (millis() - _pageEnteredMs >= PAGE_MIN_DWELL_MS);
     bool effectiveTouched = touched && touchAllowed;
+
+    // Standby activ (LOW/CRITICAL din Battery Check sau CHARGING din
+    // Battery Check / START): ruleaza doar clipitul; o atingere trezeste
+    // ecranul si revine la pagina activa, fara a ajunge la controale.
+    if (!_screenOn) {
+        if (updateStandbyBlinkPhase()) {
+            if (_standbyCharging) {
+                _batteryCheck.view().renderChargingStandby(_standbyIndicatorVisible);
+            } else {
+                BatteryCheckViewModel m;
+                _batteryCheck.fillModel(m);
+                m.standbyIndicatorOn = _standbyIndicatorVisible;
+                _batteryCheck.view().renderStandby(m);
+            }
+        }
+        if (effectiveTouched) {
+            wakeFromStandby();
+        }
+        return;
+    }
 
     switch (_page) {
         case UiPageId::BATTERY_CHECK:

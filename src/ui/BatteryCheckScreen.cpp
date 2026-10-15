@@ -35,8 +35,12 @@ void BatteryCheckScreen::render(bool forceRedraw)
         uint8_t currentLevel = _battery.getLevelPercent();
         bool currentCharging = _battery.isCharging();
 
-        if (currentLevel != _displayedLevel || currentCharging != _displayedCharging) {
-            _isRendered = false;  // Forteaza re-desenare cu noile valori
+        if (_isRendered &&
+            (currentLevel != _displayedLevel || currentCharging != _displayedCharging)) {
+            // Anti-flicker: actualizare incrementala, fara redesenare completa.
+            BatteryCheckViewModel m;
+            fillModel(m);
+            _view.renderUpdate(m);
             _displayedLevel = currentLevel;
             _displayedCharging = currentCharging;
         }

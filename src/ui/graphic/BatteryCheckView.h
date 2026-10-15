@@ -32,12 +32,21 @@ public:
     // Continut complet: titlu + tensiune + stare incarcare + indicator.
     void renderMain(const BatteryCheckViewModel& m);
 
+    // Actualizare incrementala (anti-flicker): redeseneaza DOAR zonele
+    // care se schimba (tensiune, text incarcare, indicator), fara
+    // fillScreen. Necesita ca renderMain sa fi fost apelat anterior.
+    void renderUpdate(const BatteryCheckViewModel& m);
+
     // Doar indicatorul (punctul colorat) - redesenare la schimbare de nivel.
     void renderIndicator(const BatteryCheckViewModel& m);
 
     // Continut standby: indicator (aprins/stins conform modelului) +
     // tensiunea afisata permanent deasupra.
     void renderStandby(const BatteryCheckViewModel& m);
+
+    // Standby CHARGING: ecran complet negru + punct verde (aprins/stins).
+    // Prima apelare sterge ecranul; urmatoarele redeseneaza doar punctul.
+    void renderChargingStandby(bool dotVisible);
 
     // Sterge tot ecranul (intrare in standby / iesire completa).
     void clearAll();
@@ -46,6 +55,7 @@ private:
     Adafruit_GFX* _gfx;
 
     bool     _layoutReady;
+    bool     _chargingStandbyActive; // ecranul negru de standby e deja desenat
     UiLayout _layout;
     int16_t  _indicatorRadius;
     int16_t  _indicatorX;
