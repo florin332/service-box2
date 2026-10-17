@@ -16,6 +16,7 @@ FlashDutView::FlashDutView(Adafruit_GFX* gfx)
     , _layoutReady(false)
     , _layout(0, 0)
     , _btnRadius(0)
+    , _dotRadius(0)
 {
 }
 
@@ -36,6 +37,7 @@ void FlashDutView::ensureLayout()
     _backRect     = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
                                          208, 875, 583, 100);
     _btnRadius = _layout.scaleMin(25);
+    _dotRadius = _layout.scaleMin(17);   // ca indicatorul din StartupView
 
     _layoutReady = true;
 }
@@ -62,6 +64,40 @@ void FlashDutView::renderFull(const FlashDutViewModel& m)
     drawFlashButton(m);
     drawStatus(m);
     drawBackButton();
+    drawBatteryIndicator(m);
+}
+
+void FlashDutView::drawBatteryIndicator(const FlashDutViewModel& m)
+{
+    ensureLayout();
+
+    // Indicator baterie in coltul stanga-sus, deasupra titlului (ca pe
+    // pagina SERVICE MENU)
+    UiRect zone = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
+                                       42, 20, 917, 44);
+    _gfx->fillRect(zone.x, zone.y, zone.w, zone.h, UiTheme::COLOR_BACKGROUND);
+
+    _gfx->setTextSize(UiTheme::textSizeScaled(_layout.height(), 1));
+
+    if (!m.batteryAvailable) {
+        _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
+        _gfx->setCursor(_layout.px(83), _layout.py(33));
+        _gfx->print("BATTERY: n/a");
+        return;
+    }
+
+    _gfx->fillCircle(_layout.px(83), _layout.py(42), _dotRadius, m.batteryColor);
+
+    // NOTA: snprintf("%f") nu e suportat de newlib-nano - formatare manuala.
+    float v = m.batteryVoltageV;
+    int vi = (int)v;
+    int vd = (int)((v - vi) * 100.0f + 0.5f);
+    if (vd >= 100) { vi++; vd = 0; }
+    char batStr[32];
+    snprintf(batStr, sizeof(batStr), "BATTERY: %d.%02d V", vi, vd);
+    _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
+    _gfx->setCursor(_layout.px(133), _layout.py(33));
+    _gfx->print(batStr);
 }
 
 void FlashDutView::drawDutStatus(const FlashDutViewModel& m)

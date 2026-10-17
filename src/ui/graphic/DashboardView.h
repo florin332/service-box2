@@ -25,20 +25,21 @@ enum DashboardButton : uint8_t {
 };
 
 struct DashboardViewModel {
-    bool  ina219Available;
-    float busVoltageV;
-    float currentMa;
+    bool     ina219Available;
+    float    busVoltageV;
+    float    currentMa;
+    uint16_t batteryColor;   // culoare indicator, rezolvata upstream
 };
 
 class DashboardView {
 public:
     explicit DashboardView(Adafruit_GFX* gfx);
 
-    // Desenare completa a paginii (fundal + titlu + telemetrie + butoane).
+    // Desenare completa a paginii (fundal + titlu + indicator baterie + butoane).
     void renderFull(const DashboardViewModel& m);
 
-    // Redesenare partiala a liniei de telemetrie (anti-flicker).
-    void drawTelemetry(const DashboardViewModel& m);
+    // Redesenare partiala a indicatorului de baterie (anti-flicker).
+    void drawBatteryIndicator(const DashboardViewModel& m);
 
     // Zona de hit-test a unui buton (calculata din layout).
     const UiRect& buttonRect(uint8_t idx) const { return _btnRects[idx]; }
@@ -50,6 +51,7 @@ private:
     UiLayout _layout;
     UiRect   _btnRects[DASH_BTN_COUNT];
     int16_t  _btnRadius;
+    int16_t  _dotRadius;
 
     void ensureLayout();
     void drawButton(uint8_t idx, const char* label);

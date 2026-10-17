@@ -7,6 +7,11 @@
 #include "dut/dut_flash.h"
 #include "dut/firmware_repository.h"
 #include "bsp/bsp_sdcard.h"
+#include "navigation/NavigationPolicy.h"
+
+#if defined(SERVICEBOX_WAVESHARE)
+#include "bsp/bsp_ina219.h"
+#endif
 
 // ============================================================================
 // FlashDutScreen - implementare. Vezi header-ul pentru responsabilitati.
@@ -94,6 +99,25 @@ void FlashDutScreen::init()
     _model.hostAvailable = dut_host_available();
     _model.dutConnected  = dut_cdc_connected();
     _wasConnected        = _model.dutConnected;
+
+    // Indicator baterie (snapshot la intrarea in pagina; culoarea rezolvata
+    // prin aceleasi reguli ca in pagina START).
+#if defined(SERVICEBOX_WAVESHARE)
+    ina219_data_t bat;
+    bsp_ina219_read(&bat);
+    _model.batteryAvailable = true;
+    _model.batteryVoltageV  = bat.bus_voltage_V;
+    float bv = bat.bus_voltage_V;
+    int pct = (int)((bv - 3.40f) / (4.20f - 3.40f) * 100.0f + 0.5f);
+    if (pct < 0)   pct = 0;
+    if (pct > 100) pct = 100;
+    _model.batteryColor = NavigationPolicy::indicatorColor(
+        (uint8_t)pct, bat.current_mA < -50.0f);
+#else
+    _model.batteryAvailable = false;
+    _model.batteryVoltageV  = 0.0f;
+    _model.batteryColor     = UiTheme::COLOR_TEXT_MUTED;
+#endif
 
     if (blankMsc) {
         if (0 == _model.fileCount) {

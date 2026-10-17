@@ -1,5 +1,7 @@
 #include "DashboardScreen.h"
 
+#include "navigation/NavigationPolicy.h"
+
 #if defined(SERVICEBOX_WAVESHARE)
 #include "bsp/bsp_ina219.h"
 #endif
@@ -38,10 +40,20 @@ void DashboardScreen::readTelemetry()
     _model.ina219Available = true;
     _model.busVoltageV     = data.bus_voltage_V;
     _model.currentMa       = data.current_mA;
+
+    // Procent derivat liniar (3.40V=0% .. 4.20V=100%), doar pentru culoare.
+    float v = data.bus_voltage_V;
+    int pct = (int)((v - 3.40f) / (4.20f - 3.40f) * 100.0f + 0.5f);
+    if (pct < 0)   pct = 0;
+    if (pct > 100) pct = 100;
+    bool charging = (data.current_mA < -50.0f);
+    _model.batteryColor = NavigationPolicy::indicatorColor((uint8_t)pct,
+                                                           charging);
 #else
     _model.ina219Available = false;
     _model.busVoltageV     = 0.0f;
     _model.currentMa       = 0.0f;
+    _model.batteryColor    = UiTheme::COLOR_TEXT_MUTED;
 #endif
 }
 
@@ -121,6 +133,6 @@ void DashboardScreen::render(bool forceRedraw)
     if (now - _lastTelemetryMs >= TELEMETRY_REFRESH_MS) {
         _lastTelemetryMs = now;
         readTelemetry();
-        _view.drawTelemetry(_model);
+        _view.drawBatteryIndicator(_model);
     }
 }

@@ -30,6 +30,9 @@ struct FlashDutViewModel {
     uint8_t  progressPct;               // 0..100 (in timpul scrierii)
     char     statusLine[48];            // text de stare/eroare (rezolvat)
     uint16_t statusColor;               // culoarea textului de stare
+    bool     batteryAvailable;          // INA219 prezent
+    float    batteryVoltageV;
+    uint16_t batteryColor;              // culoare indicator, rezolvata upstream
 };
 
 class FlashDutView {
@@ -43,6 +46,7 @@ public:
     void drawFileRow(const FlashDutViewModel& m, uint8_t idx);
     void drawFlashButton(const FlashDutViewModel& m);
     void drawStatus(const FlashDutViewModel& m);   // progres + linia de stare
+    void drawBatteryIndicator(const FlashDutViewModel& m);
 
     // Zone de hit-test (calculate din layout).
     const UiRect& backRect()  const { return _backRect; }
@@ -59,6 +63,7 @@ private:
     UiRect   _fileRects[FLASH_MAX_FILES];
     UiRect   _progressRect;
     int16_t  _btnRadius;
+    int16_t  _dotRadius;
 
     void ensureLayout();
     void drawDutStatus(const FlashDutViewModel& m);

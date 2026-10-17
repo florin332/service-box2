@@ -1,12 +1,10 @@
 #include "DashboardView.h"
 
-#include <math.h>
-
 // ============================================================================
 // DashboardView - implementare.
 //
 // Layout in miimi (calibrat pentru 240x320):
-//   titlu "SERVICE MENU" y=94, telemetrie INA219 y=190,
+//   titlu "SERVICE MENU" y=94, indicator baterie stanga-jos (ca in START),
 //   grila 2x2: FLASH (83,280), TEST (537,280), INFO (83,530),
 //              SVC OUT (537,530); butoane 380x200, raza 25 la scara minima.
 // ============================================================================
@@ -24,6 +22,7 @@ DashboardView::DashboardView(Adafruit_GFX* gfx)
     , _layoutReady(false)
     , _layout(0, 0)
     , _btnRadius(0)
+    , _dotRadius(0)
 {
 }
 
@@ -38,6 +37,7 @@ void DashboardView::ensureLayout()
                                             BTN_X[i], BTN_Y[i], 380, 200);
     }
     _btnRadius = _layout.scaleMin(25);
+    _dotRadius = _layout.scaleMin(17);   // ca in StartupView
 
     _layoutReady = true;
 }
@@ -55,43 +55,45 @@ void DashboardView::renderFull(const DashboardViewModel& m)
                     _layout.py(94));
     _gfx->print("SERVICE MENU");
 
-    drawTelemetry(m);
+    drawBatteryIndicator(m);
 
     for (uint8_t i = 0; i < DASH_BTN_COUNT; i++) {
         drawButton(i, BTN_LABELS[i]);
     }
 }
 
-void DashboardView::drawTelemetry(const DashboardViewModel& m)
+void DashboardView::drawBatteryIndicator(const DashboardViewModel& m)
 {
     ensureLayout();
 
-    // Curata zona liniei de telemetrie
+    // Zona indicatorului de baterie, coltul stanga-sus (deasupra titlului)
     UiRect zone = _layout.anchoredRect(UiHAnchor::LEFT, UiVAnchor::TOP,
-                                       42, 180, 917, 44);
+                                       42, 20, 917, 44);
     _gfx->fillRect(zone.x, zone.y, zone.w, zone.h, UiTheme::COLOR_BACKGROUND);
 
-    uint8_t s = UiTheme::textSizeScaled(_layout.height(), 1);
-    _gfx->setTextSize(s);
-    _gfx->setCursor(_layout.px(42), _layout.py(190));
+    _gfx->setTextSize(UiTheme::textSizeScaled(_layout.height(), 1));
 
     if (!m.ina219Available) {
         _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
-        _gfx->print("INA219: n/a");
+        _gfx->setCursor(_layout.px(83), _layout.py(33));
+        _gfx->print("BATTERY: n/a");
         return;
     }
 
-    // NOTA: snprintf("%f") nu e suportat de newlib-nano - formatare manuala.
-    int vi = (int)m.busVoltageV;
-    int vd = (int)((m.busVoltageV - vi) * 100.0f + 0.5f);
-    if (vd >= 100) { vi++; vd = 0; }
-    int ii = (int)m.currentMa;
-    int id = (int)(fabsf(m.currentMa - ii) * 10.0f + 0.5f);
+    // Punct indicator colorat (culoarea vine rezolvata din model)
+    _gfx->fillCircle(_layout.px(83), _layout.py(42), _dotRadius, m.batteryColor);
 
-    _gfx->setTextColor(UiTheme::COLOR_YELLOW);
-    _gfx->printf("V: %d.%02d V", vi, vd);
-    _gfx->setTextColor(UiTheme::COLOR_GREEN);
-    _gfx->printf("   I: %d.%d mA", ii, id);
+    // Text tensiune.
+    // NOTA: snprintf("%f") nu e suportat de newlib-nano - formatare manuala.
+    float v = m.busVoltageV;
+    int vi = (int)v;
+    int vd = (int)((v - vi) * 100.0f + 0.5f);
+    if (vd >= 100) { vi++; vd = 0; }  // rotunjire care depaseste (ex. 3.999)
+    char batStr[32];
+    snprintf(batStr, sizeof(batStr), "BATTERY: %d.%02d V", vi, vd);
+    _gfx->setTextColor(UiTheme::COLOR_TEXT_MUTED);
+    _gfx->setCursor(_layout.px(133), _layout.py(33));
+    _gfx->print(batStr);
 }
 
 void DashboardView::drawButton(uint8_t idx, const char* label)
