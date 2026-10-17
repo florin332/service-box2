@@ -21,6 +21,7 @@ constexpr uint8_t FLASH_MAX_FILES = 4;   // cati nume incap in lista
 struct FlashDutViewModel {
     bool     hostAvailable;             // false pe build-ul Marble
     bool     dutConnected;              // link CDC activ cu DUT-ul
+    bool     blankMsc;                  // DUT blank: enumerat direct ca MSC
     char     dutIdentity[24];           // "D_01_10.28" sau gol
     uint8_t  fileCount;                 // cate nume valide in fileNames
     char     fileNames[FLASH_MAX_FILES][24];

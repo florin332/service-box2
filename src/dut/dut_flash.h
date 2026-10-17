@@ -53,6 +53,12 @@ void dut_flash_init();
 // sau daca DUT-ul nu este pe CDC.
 bool dut_flash_start(const char* uf2Name);
 
+// Varianta "blank DUT": panou nou/neprogramat care s-a enumerat DIRECT ca
+// volum MSC (RPI-RP2), fara CDC si fara identitate. Sare peste IDENTIFY si
+// ENTER_BOOTSEL si intra direct in WAIT_MSC (MSC-ul este deja, de regula,
+// prezent). Returneaza false daca nu exista inca volum MSC.
+bool dut_flash_start_direct(const char* uf2Name);
+
 // Un pas al masinii de stari. Apelata din loop() (core0), la fiecare iteratie.
 void dut_flash_update();
 

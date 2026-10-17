@@ -38,6 +38,8 @@ void FlashDutScreen::refreshDutState(bool allowQuery)
 
     bool connected = dut_cdc_connected();
     _model.dutConnected = connected;
+    // In modul blank (MSC direct) flag-ul ramane setat din init(); nu este
+    // reevaluat aici - pagina este statica, revenirea la START reface starea.
 
     if (connected && (!_wasConnected || allowQuery)) {
         // Identitatea (versiunea curenta) - blocant max ~2.5s, doar la
@@ -64,7 +66,18 @@ void FlashDutScreen::init()
     // Lista firmware-urilor vine din Repository, filtrata pe Panel ID-ul
     // din handshake-ul de la apasarea START (regula: "<panelId>_*.uf2").
     const DutPanelInfo& panel = dut_panel_info();
-    if (panel.valid) {
+    bool blankMsc = !panel.valid && !dut_cdc_connected() &&
+                    (dut_msc_dev_addr() != 0);
+
+    if (blankMsc) {
+        // Flux "blank DUT": panou nou, enumerat direct ca volum MSC
+        // (RPI-RP2), fara CDC si fara identitate. Nu exista Panel ID,
+        // deci listam TOATE .uf2-urile; utilizatorul alege explicit.
+        _model.fileCount = (uint8_t)fw_repo_list_all(_model.fileNames,
+                                                     FLASH_MAX_FILES);
+        strncpy(_model.dutIdentity, "blank (bootloader)",
+                sizeof(_model.dutIdentity) - 1);
+    } else if (panel.valid) {
         _model.fileCount = (uint8_t)fw_repo_list_compatible(
             panel.panelId, _model.fileNames, FLASH_MAX_FILES);
         strncpy(_model.dutIdentity, panel.identity,
@@ -72,12 +85,20 @@ void FlashDutScreen::init()
     } else {
         _model.fileCount = 0;
     }
+    _model.blankMsc = blankMsc;
 
     _model.hostAvailable = dut_host_available();
     _model.dutConnected  = dut_cdc_connected();
     _wasConnected        = _model.dutConnected;
 
-    if (!panel.valid) {
+    if (blankMsc) {
+        if (0 == _model.fileCount) {
+            setStatus("Niciun .uf2 pe SD", UiTheme::COLOR_YELLOW);
+        } else {
+            setStatus("DUT blank: alege firmware (nefiltrat)",
+                      UiTheme::COLOR_YELLOW);
+        }
+    } else if (!panel.valid) {
         setStatus("Handshake lipsa - revino la START", UiTheme::COLOR_YELLOW);
     } else if (0 == _model.fileCount) {
         setStatus("Niciun firmware compatibil pe SD", UiTheme::COLOR_YELLOW);
@@ -142,11 +163,14 @@ bool FlashDutScreen::update(int touchX, int touchY, bool isTouched)
 
     if (_flashHeld) {
         _flashHeld = false;
-        bool enabled = _model.hostAvailable && _model.dutConnected &&
+        bool enabled = _model.hostAvailable &&
+                       (_model.dutConnected || _model.blankMsc) &&
                        (_model.selected >= 0);
         if (enabled && hitTest(_view.flashRect(), touchX, touchY)) {
             const char* name = _model.fileNames[_model.selected];
-            if (dut_flash_start(name)) {
+            bool started = _model.blankMsc ? dut_flash_start_direct(name)
+                                           : dut_flash_start(name);
+            if (started) {
                 _model.flashActive = true;
                 setStatus("Pornire flash...", UiTheme::COLOR_TEXT_MUTED);
                 _view.drawStatus(_model);

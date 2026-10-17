@@ -62,3 +62,14 @@ uint16_t fw_repo_list_compatible(const char* panelId,
     }
     return count;
 }
+
+uint16_t fw_repo_list_all(char names[][24], uint16_t maxNames)
+{
+    if (NULL == names || 0 == maxNames)
+        return 0;
+
+    if (!bsp_sdcard_is_mounted())
+        return 0;
+
+    return bsp_sdcard_list_by_ext(".uf2", names, maxNames);
+}

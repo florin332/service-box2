@@ -84,6 +84,9 @@ void FlashDutView::drawDutStatus(const FlashDutViewModel& m)
         _gfx->setTextColor(UiTheme::COLOR_GREEN);
         _gfx->print("DUT: ");
         _gfx->print(m.dutIdentity[0] ? m.dutIdentity : "conectat");
+    } else if (m.blankMsc) {
+        _gfx->setTextColor(UiTheme::COLOR_YELLOW);
+        _gfx->print("DUT: blank (bootloader, fara identitate)");
     } else {
         _gfx->setTextColor(UiTheme::COLOR_YELLOW);
         _gfx->print("DUT: neconectat");
@@ -126,8 +129,8 @@ void FlashDutView::drawFlashButton(const FlashDutViewModel& m)
     ensureLayout();
 
     const UiRect& r = _flashRect;
-    bool enabled = m.hostAvailable && m.dutConnected && !m.flashActive &&
-                   (m.selected >= 0);
+    bool enabled = m.hostAvailable && (m.dutConnected || m.blankMsc) &&
+                   !m.flashActive && (m.selected >= 0);
 
     uint16_t fill = enabled ? UiTheme::COLOR_BTN_BASE
                             : UiTheme::COLOR_BTN_DISABLED;

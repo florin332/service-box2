@@ -22,4 +22,10 @@
 uint16_t fw_repo_list_compatible(const char* panelId,
                                  char names[][24], uint16_t maxNames);
 
+// Listeaza TOATE fisierele .uf2 de pe SD, fara filtrare pe Panel ID.
+// Folosit exclusiv in fluxul "blank DUT" (panou nou, direct in bootloader,
+// fara identitate) - acolo nu exista Panel ID si utilizatorul alege
+// explicit firmware-ul, asumand riscul unei potriviri gresite.
+uint16_t fw_repo_list_all(char names[][24], uint16_t maxNames);
+
 #endif // FIRMWARE_REPOSITORY_H

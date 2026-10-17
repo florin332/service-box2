@@ -41,6 +41,8 @@ static uint32_t s_nextLba;
 static bool     s_bootselAcked;   // DUT a confirmat SRV BOOTSEL
 static bool     s_cdcDropped;     // linkul CDC a cazut => DUT s-a resetat
 static bool     s_reenumForced;   // s-a fortat o re-enumerare a portului
+static bool     s_directMsc;      // mod "blank DUT": scriere directa pe MSC,
+                                  // fara CDC/identitate/SRV BOOTSEL
 static DutLink  s_lastLink;       // ultima stare de link logata in WAIT_MSC
 
 static void setPhase(DutFlashPhase p)
@@ -103,22 +105,15 @@ void dut_flash_init()
     bsp_sdcard_file_close();
     memset(&s_status, 0, sizeof(s_status));
     s_status.phase = DutFlashPhase::IDLE;
+    s_directMsc = false;
 }
 
-bool dut_flash_start(const char* uf2Name)
+// Partea comuna a celor doua variante de start: nume fisier, deschidere SD,
+// validare UF2. La esec motivul este deja in status().error.
+static bool startCommon(const char* uf2Name)
 {
-    if (dut_flash_busy())
-        return false;
-
-    dut_flash_init();
-
     if (NULL == uf2Name || '\0' == uf2Name[0]) {
         fail("niciun fisier selectat");
-        return false;
-    }
-
-    if (!dut_cdc_connected()) {
-        fail("DUT neconectat");
         return false;
     }
 
@@ -130,13 +125,58 @@ bool dut_flash_start(const char* uf2Name)
         return false;
     }
 
-    if (!validateUf2()) {
-        return false;  // motivul e deja in status.error
+    return validateUf2();
+}
+
+bool dut_flash_start(const char* uf2Name)
+{
+    if (dut_flash_busy())
+        return false;
+
+    dut_flash_init();
+
+    if (!dut_cdc_connected()) {
+        fail("DUT neconectat");
+        return false;
     }
+
+    if (!startCommon(uf2Name))
+        return false;
 
     Serial.printf("DUT FLASH: start '%s' (%lu sectoare)\n",
                   s_status.fileName, (unsigned long)s_status.totalBlocks);
     setPhase(DutFlashPhase::IDENTIFY);
+    return true;
+}
+
+bool dut_flash_start_direct(const char* uf2Name)
+{
+    if (dut_flash_busy())
+        return false;
+
+    dut_flash_init();
+
+    // Conditie dura: DUT-ul blank trebuie sa fie deja enumerat ca volum
+    // MSC (RPI-RP2). Fara volum nu avem pe ce scrie - nu exista CDC prin
+    // care sa cerem BOOTSEL.
+    if (dut_msc_dev_addr() == 0) {
+        fail("volum MSC absent (conecteaza DUT in bootloader)");
+        return false;
+    }
+
+    if (!startCommon(uf2Name))
+        return false;
+
+    s_directMsc   = true;
+    s_bootselAcked = false;
+    s_cdcDropped   = false;
+    s_reenumForced = false;
+    s_lastLink     = dut_link_state();
+    s_phaseDeadline = millis() + WAIT_MSC_MS;
+
+    Serial.printf("DUT FLASH: start direct (blank) '%s' (%lu sectoare)\n",
+                  s_status.fileName, (unsigned long)s_status.totalBlocks);
+    setPhase(DutFlashPhase::WAIT_MSC);
     return true;
 }
 
@@ -226,7 +266,9 @@ void dut_flash_update()
             break;
         }
         if ((int32_t)(millis() - s_phaseDeadline) > 0) {
-            if (s_cdcDropped) {
+            if (s_directMsc) {
+                fail("volumul MSC a disparat inainte de scriere");
+            } else if (s_cdcDropped) {
                 fail("DUT resetat, dar volumul MSC nu a aparut");
             } else {
                 fail("DUT nu a intrat in bootloader (apasa BOOTSEL fizic)");
