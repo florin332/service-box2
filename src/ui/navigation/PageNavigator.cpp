@@ -32,7 +32,6 @@ PageNavigator::PageNavigator(StartupScreen& startup,
     , _battery(battery)
     , _page(UiPageId::BATTERY_CHECK)
     , _pageNeedsRender(true)
-    , _pageEnteredMs(0)
     , _evHead(0)
     , _evTail(0)
     , _screenOn(true)
@@ -77,7 +76,6 @@ void PageNavigator::enterPage(UiPageId page)
 {
     _page = page;
     _pageNeedsRender = true;
-    _pageEnteredMs = millis();  // incepe perioada de stationare (touch ignorat)
 
     switch (page) {
         case UiPageId::BATTERY_CHECK:
@@ -159,7 +157,6 @@ void PageNavigator::wakeFromStandby()
     _lastActivityMs = millis();
     _batteryCheck.view().clearAll(); // reseteaza si flag-ul de standby CHARGING
     _pageNeedsRender = true;       // pagina activa se redeseneaza complet
-    _pageEnteredMs = millis();     // dwell: touch-ul curent nu ajunge la butoane
     bsp_touch_wait_release();      // nu propagam atingerea care a trezit ecranul
 }
 
@@ -373,12 +370,9 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
         pushEvent(UiEvent::FORCED_LOW_POWER);
     }
 
-    // Timp minim de stationare: touch-ul este ignorat in primele
-    // PAGE_MIN_DWELL_MS dupa intrarea pe pagina, ca sa nu fie activate
-    // din greseala butoanele paginii noi care se suprapun cu cele de pe
-    // pagina anterioara. Randarea si logica automata continua normal.
-    bool touchAllowed = (millis() - _pageEnteredMs >= PAGE_MIN_DWELL_MS);
-    bool effectiveTouched = touched && touchAllowed;
+    // Fara timp minim de stationare: debounce-ul touch din screen-uri
+    // (armare pe front + eliberare confirmata pe timp) protejeaza impotriva
+    // activarii accidentale a butoanelor la tranzitii.
 
     // Standby activ (LOW/CRITICAL din Battery Check sau CHARGING din
     // Battery Check / START): ruleaza doar clipitul; o atingere trezeste
@@ -394,7 +388,7 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
                 _batteryCheck.view().renderStandby(m);
             }
         }
-        if (effectiveTouched) {
+        if (touched) {
             wakeFromStandby();
         }
         return;
@@ -402,19 +396,19 @@ void PageNavigator::update(int16_t touchX, int16_t touchY, bool touched)
 
     switch (_page) {
         case UiPageId::BATTERY_CHECK:
-            updateBatteryCheckPage(touchX, touchY, effectiveTouched);
+            updateBatteryCheckPage(touchX, touchY, touched);
             break;
         case UiPageId::START:
-            updateStartPage(touchX, touchY, effectiveTouched);
+            updateStartPage(touchX, touchY, touched);
             break;
         case UiPageId::DASHBOARD:
-            updateDashboardPage(touchX, touchY, effectiveTouched);
+            updateDashboardPage(touchX, touchY, touched);
             break;
         case UiPageId::SD_CHECK:
-            updateSdCheckPage(touchX, touchY, effectiveTouched);
+            updateSdCheckPage(touchX, touchY, touched);
             break;
         case UiPageId::FLASH_DUT:
-            updateFlashDutPage(touchX, touchY, effectiveTouched);
+            updateFlashDutPage(touchX, touchY, touched);
             break;
     }
 }

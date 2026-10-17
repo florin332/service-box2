@@ -28,6 +28,12 @@ public:
 private:
     SdCheckView _view;      // renderer pasiv
     bool        _backHeld;  // degetul e apasat in zona BACK
+    bool        _touchDown;         // front de atingere (debounce)
+    uint32_t    _releaseStartMs;    // inceputul eliberarii (0 = niciuna)
+
+    // Debounce touch: eliberarea este acceptata dupa atatea ms continui fara
+    // atingere (loop() nu are delay, un prag pe cadre ar fi inutil).
+    static constexpr uint32_t TOUCH_RELEASE_CONFIRM_MS = 60;
 
     void fillModel(SdCheckViewModel& m);
 };

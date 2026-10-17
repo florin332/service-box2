@@ -28,10 +28,10 @@ class FlashDutScreen;
 //   - navigarea din DASHBOARD: FLASH -> Flash DUT, SVC OUT -> START
 //   - din FLASH_DUT: BACK -> DASHBOARD (sesiunea de service ramane
 //     activa); terminarea flash-ului -> START (panelul a reboot-at)
-//   - timp minim de stationare pe pagina (PAGE_MIN_DWELL_MS): atingerile
-//     sunt ignorate imediat dupa o tranzitie, pentru a nu activa din
-//     greseala butoane de pe pagina noua care se suprapun cu cele de pe
-//     pagina anterioara
+//
+// Fara timp minim de stationare pe pagini: debounce-ul touch din
+// screen-uri (armare pe front + eliberare confirmata pe timp) face
+// inutila protectia dwell la tranzitii.
 //
 // NU deseneaza nimic si NU executa actiuni: emite evenimente (UiEvent)
 // catre main/Actions si ofera flag-uri de stare pentru desenare.
@@ -47,10 +47,10 @@ public:
                   FlashDutScreen& flashDut, IBatteryProvider& battery);
 
     // Intrarea formala in pagina initiala (BATTERY_CHECK). Se apeleaza la
-    // finalul setup(): reseteaza timpii de activitate/stationare, astfel
-    // timeout-ul de 5s si dwell-ul pornesc din momentul in care pagina
-    // devine efectiv vizibila (setup-ul poate dura >5s: BAT KEY 3s +
-    // SD self-test + mount), nu din momentul constructii.
+    // finalul setup(): reseteaza timpul de activitate, astfel timeout-ul
+    // de 5s porneste din momentul in care pagina devine efectiv vizibila
+    // (setup-ul poate dura >5s: BAT KEY 3s + SD self-test + mount), nu din
+    // momentul constructii.
     void begin();
 
     // O iteratie de loop: proceseaza inputul si aplica regulile.
@@ -74,7 +74,6 @@ private:
 
     UiPageId      _page;
     bool          _pageNeedsRender;
-    unsigned long _pageEnteredMs;  // millis() la intrarea pe pagina curenta
 
     // Coada de evenimente (capacitate 4 - suficient pentru o iteratie)
     UiEvent _events[4];
@@ -97,9 +96,6 @@ private:
     static constexpr unsigned long CHARGING_STANDBY_MS   = 10000UL;
     static constexpr unsigned long STANDBY_BLINK_OFF_MS  = 2000UL;
     static constexpr unsigned long STANDBY_BLINK_ON_MS   = 1000UL;
-    // Timp minim de stationare pe o pagina: touch-ul este ignorat in
-    // primele 1.5s dupa tranzitie (protectie la suprapunerea butoanelor).
-    static constexpr unsigned long PAGE_MIN_DWELL_MS     = 1000UL;
 
     void enterPage(UiPageId page);
     void pushEvent(UiEvent ev);

@@ -25,6 +25,8 @@ private:
     bool _isRendered;
     bool _buttonPressed;
     bool _sdButtonPressed;  // hit-tracking buton SD (activare la eliberare)
+    bool _touchDown;        // front de atingere (debounce)
+    uint32_t _releaseStartMs; // inceputul eliberarii (0 = niciuna)
     bool _sdAvailable;      // stare card (setata prin updateStorageInfo)
     uint32_t _sdFreeMB;     // capacitati reale (retine pentru renderFull)
     uint32_t _sdTotalMB;
@@ -40,6 +42,9 @@ private:
 
     // Pragurile de nivel si gating-ul baterie sunt in NavigationPolicy.
     static constexpr unsigned long BATTERY_UPDATE_MS = 1500UL;
+    // Debounce touch: eliberarea este acceptata dupa atatea ms continui fara
+    // atingere (loop() nu are delay, un prag pe cadre ar fi inutil).
+    static constexpr uint32_t TOUCH_RELEASE_CONFIRM_MS = 60;
 
     void drawButton();
     void drawBatteryInfo();

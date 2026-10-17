@@ -17,6 +17,8 @@ FlashDutScreen::FlashDutScreen(Adafruit_GFX* tftInstance)
     , _backHeld(false)
     , _flashHeld(false)
     , _rowHeld(-1)
+    , _touchDown(false)
+    , _releaseStartMs(0)
     , _wasConnected(false)
     , _lastProgressPct(255)   // fortat diferit la primul render
 {
@@ -62,6 +64,8 @@ void FlashDutScreen::init()
     _lastStatusLine[0] = '\0';
     _backHeld = _flashHeld = false;
     _rowHeld = -1;
+    _touchDown = false;
+    _releaseStartMs = 0;
 
     // Lista firmware-urilor vine din Repository, filtrata pe Panel ID-ul
     // din handshake-ul de la apasarea START (regula: "<panelId>_*.uf2").
@@ -118,14 +122,62 @@ bool FlashDutScreen::update(int touchX, int touchY, bool isTouched)
 {
     bool busy = dut_flash_busy();
 
-    // BACK: blocat in timpul flash-ului (iesirea ar lasa UI-ul inconsistent).
-    if (isTouched && hitTest(_view.backRect(), touchX, touchY)) {
-        _backHeld = true;
-    } else if (!isTouched && _backHeld) {
+    // ---- Filtru touch ------------------------------------------------------
+    // Armare doar pe frontul crescator al atingerii; eliberarea este
+    // confirmata dupa RELEASE_CONFIRM_MS milisecunde consecutive fara touch.
+    // Fara acest filtru, un glitch din citirea CST328 era interpretat ca
+    // eliberare si comuta selectia / pornea actiunea in timp ce degetul
+    // era inca pe ecran.
+    if (isTouched) {
+        _releaseStartMs = 0;
+        if (_touchDown) {
+            return false;   // tinere apasata - nu se re-armeaza nimic
+        }
+        _touchDown = true;
+
+        // Front crescator: armam cel mult un control.
+        _rowHeld   = -1;
+        _flashHeld = false;
+        _backHeld  = hitTest(_view.backRect(), touchX, touchY);
+
+        if (!_backHeld && !busy) {
+            for (uint8_t i = 0; i < _model.fileCount; i++) {
+                if (hitTest(_view.fileRowRect(i), touchX, touchY)) {
+                    _rowHeld = (int8_t)i;
+                    break;
+                }
+            }
+            if (_rowHeld < 0) {
+                _flashHeld = hitTest(_view.flashRect(), touchX, touchY);
+            }
+        }
+        return false;
+    }
+
+    // Fara atingere: asteptam confirmarea eliberarii (pe timp).
+    if (!_touchDown) {
+        return false;
+    }
+    uint32_t nowMs = millis();
+    if (_releaseStartMs == 0) {
+        _releaseStartMs = nowMs;   // primul cadru fara atingere
+        return false;
+    }
+    if ((uint32_t)(nowMs - _releaseStartMs) < RELEASE_CONFIRM_MS) {
+        return false;
+    }
+    _touchDown = false;
+    _releaseStartMs = 0;
+
+    // ---- Eliberare confirmata ----------------------------------------------
+    if (_backHeld) {
         _backHeld = false;
+        _rowHeld = -1;
+        _flashHeld = false;
         if (!busy) {
             return true;   // cerere BACK catre navigator
         }
+        return false;      // BACK blocat in timpul flash-ului
     }
 
     if (busy) {
@@ -135,22 +187,6 @@ bool FlashDutScreen::update(int touchX, int touchY, bool isTouched)
         return false;
     }
 
-    // Selectie fisier (activare la eliberare, ca restul UI-ului)
-    if (isTouched) {
-        _rowHeld = -1;
-        for (uint8_t i = 0; i < _model.fileCount; i++) {
-            if (hitTest(_view.fileRowRect(i), touchX, touchY)) {
-                _rowHeld = (int8_t)i;
-                break;
-            }
-        }
-        if (_rowHeld < 0 && hitTest(_view.flashRect(), touchX, touchY)) {
-            _flashHeld = true;
-        }
-        return false;
-    }
-
-    // Eliberare
     if (_rowHeld >= 0) {
         int8_t row = _rowHeld;
         _rowHeld = -1;

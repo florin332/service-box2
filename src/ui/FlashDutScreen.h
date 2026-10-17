@@ -46,6 +46,15 @@ private:
     bool    _backHeld;
     bool    _flashHeld;
     int8_t  _rowHeld;               // -1 = niciun rand apasat
+    // Filtru touch: apasarea se armaza o singura data, pe frontul crescator;
+    // eliberarea este acceptata doar dupa RELEASE_CONFIRM_MS milisecunde
+    // consecutive fara atingere (elimina toggle-urile din glitch-urile
+    // CST328 care redeclanseau actiunea cat degetul era inca pe ecran).
+    // Confirmarea este pe TIMP, nu pe cadre: loop() nu are delay, deci
+    // un numar mic de cadre acoperea doar cativa ms.
+    static constexpr uint16_t RELEASE_CONFIRM_MS = 60;
+    bool     _touchDown;
+    uint32_t _releaseStartMs;
     bool    _wasConnected;          // pentru detectia tranzitiilor de link
     uint8_t _lastProgressPct;       // anti-flicker pe zona de stare
     char    _lastStatusLine[48];

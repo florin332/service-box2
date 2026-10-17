@@ -13,6 +13,8 @@
 SdCheckScreen::SdCheckScreen(Adafruit_GFX* tftInstance)
     : _view(tftInstance)
     , _backHeld(false)
+    , _touchDown(false)
+    , _releaseStartMs(0)
 {
 }
 
@@ -45,6 +47,8 @@ void SdCheckScreen::fillModel(SdCheckViewModel& m)
 void SdCheckScreen::init()
 {
     _backHeld = false;
+    _touchDown = false;
+    _releaseStartMs = 0;
 
     SdCheckViewModel m;
     fillModel(m);
@@ -53,16 +57,36 @@ void SdCheckScreen::init()
 
 bool SdCheckScreen::update(int touchX, int touchY, bool isTouched)
 {
-    const UiRect& r = _view.backRect();
-    bool inBtn = (touchX >= r.x && touchX <= (r.x + r.w) &&
-                  touchY >= r.y && touchY <= (r.y + r.h));
-
+    // Filtru touch (ca in FlashDutScreen): armarea BACK se face doar pe
+    // frontul crescator, iar eliberarea este acceptata dupa
+    // TOUCH_RELEASE_CONFIRM_MS ms continui fara atingere.
     if (isTouched) {
-        _backHeld = inBtn;
+        _releaseStartMs = 0;
+        if (_touchDown) {
+            return false;   // tinere apasata - nu se re-armeaza
+        }
+        _touchDown = true;
+
+        const UiRect& r = _view.backRect();
+        _backHeld = (touchX >= r.x && touchX <= (r.x + r.w) &&
+                     touchY >= r.y && touchY <= (r.y + r.h));
         return false;
     }
 
-    // Eliberare: confirmare doar daca apasarea a inceput in buton.
+    if (!_touchDown) {
+        return false;
+    }
+    if (_releaseStartMs == 0) {
+        _releaseStartMs = millis();
+        return false;
+    }
+    if ((uint32_t)(millis() - _releaseStartMs) < TOUCH_RELEASE_CONFIRM_MS) {
+        return false;
+    }
+    _touchDown = false;
+    _releaseStartMs = 0;
+
+    // Eliberare confirmata: BACK daca apasarea a inceput in buton.
     if (_backHeld) {
         _backHeld = false;
         return true;

@@ -10,6 +10,8 @@ StartupScreen::StartupScreen(Adafruit_GFX* tftInstance, IBatteryProvider& batter
     , _isRendered(false)
     , _buttonPressed(false)
     , _sdButtonPressed(false)
+    , _touchDown(false)
+    , _releaseStartMs(0)
     , _sdAvailable(false)
     , _sdFreeMB(0)
     , _sdTotalMB(0)
@@ -23,6 +25,8 @@ void StartupScreen::init() {
     _isRendered = false;
     _buttonPressed = false;
     _sdButtonPressed = false;
+    _touchDown = false;
+    _releaseStartMs = 0;
     _displayedLevel = 0xFF;
     _displayedCharging = false;
     _lastBatteryUpdateMs = 0;
@@ -116,32 +120,47 @@ StartupScreen::TouchRequest StartupScreen::update(int touchX, int touchY, bool i
     bool inSd    = (touchX >= sdBtn.x && touchX <= (sdBtn.x + sdBtn.w) &&
                     touchY >= sdBtn.y && touchY <= (sdBtn.y + sdBtn.h));
 
+    // Filtru touch (ca in FlashDutScreen): armarea butoanelor se face doar
+    // pe frontul crescator al atingerii, iar eliberarea este acceptata dupa
+    // TOUCH_RELEASE_CONFIRM_MS ms continui fara atingere. Fara filtru,
+    // glitch-urile CST328 redeclansa actiunea cat degetul era inca pe ecran.
     if (isTouched) {
-        // Fara redesenare la apasare: nu exista feedback vizual de culoare,
-        // redesenarea era sursa flicker-ului.
-        _buttonPressed   = inStart;
-        _sdButtonPressed = inSd && !inStart;
-    } else {
-        // Finger released from active capacitive/resistive target window
-        if (_buttonPressed) {
-            _buttonPressed = false;
-
-            // Aplicare politica baterie (NavigationPolicy): LOW/CRITICAL
-            // blocheaza initierea unui test nou.
-            if (!NavigationPolicy::startAllowed(_battery.getState())) {
-                Serial.println("[StartupScreen] START blocked: battery LOW/CRITICAL");
-            } else {
-                request = TouchRequest::START;
-            }
+        _releaseStartMs = 0;
+        if (!_touchDown) {
+            _touchDown = true;
+            // Fara redesenare la apasare: nu exista feedback vizual de
+            // culoare, redesenarea era sursa flicker-ului.
+            _buttonPressed   = inStart;
+            _sdButtonPressed = inSd && !inStart;
         }
+    } else if (_touchDown) {
+        if (_releaseStartMs == 0) {
+            _releaseStartMs = now;   // primul cadru fara atingere
+        } else if ((uint32_t)(now - _releaseStartMs) >= TOUCH_RELEASE_CONFIRM_MS) {
+            // Eliberare confirmata.
+            _touchDown = false;
+            _releaseStartMs = 0;
 
-        if (_sdButtonPressed) {
-            _sdButtonPressed = false;
+            if (_buttonPressed) {
+                _buttonPressed = false;
 
-            if (_sdAvailable) {
-                request = TouchRequest::SD_CHECK;
-            } else {
-                Serial.println("[StartupScreen] SD blocked: card absent");
+                // Aplicare politica baterie (NavigationPolicy): LOW/CRITICAL
+                // blocheaza initierea unui test nou.
+                if (!NavigationPolicy::startAllowed(_battery.getState())) {
+                    Serial.println("[StartupScreen] START blocked: battery LOW/CRITICAL");
+                } else {
+                    request = TouchRequest::START;
+                }
+            }
+
+            if (_sdButtonPressed) {
+                _sdButtonPressed = false;
+
+                if (_sdAvailable) {
+                    request = TouchRequest::SD_CHECK;
+                } else {
+                    Serial.println("[StartupScreen] SD blocked: card absent");
+                }
             }
         }
     }

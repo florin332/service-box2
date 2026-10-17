@@ -12,6 +12,8 @@ DashboardScreen::DashboardScreen(Adafruit_GFX* tftInstance)
     : _view(tftInstance)
     , _isRendered(false)
     , _btnHeld(-1)
+    , _touchDown(false)
+    , _releaseStartMs(0)
     , _lastTelemetryMs(0)
 {
     memset(&_model, 0, sizeof(_model));
@@ -21,6 +23,8 @@ void DashboardScreen::init()
 {
     _isRendered = false;
     _btnHeld = -1;
+    _touchDown = false;
+    _releaseStartMs = 0;
     _lastTelemetryMs = 0;
     readTelemetry();
     render(true);
@@ -49,7 +53,17 @@ bool DashboardScreen::hitTest(const UiRect& r, int x, int y)
 DashboardScreen::NavRequest DashboardScreen::update(int touchX, int touchY,
                                                     bool isTouched)
 {
+    // Filtru touch (ca in FlashDutScreen): armarea butonului se face doar pe
+    // frontul crescator al atingerii, iar eliberarea este acceptata dupa
+    // TOUCH_RELEASE_CONFIRM_MS ms continui fara atingere. Fara filtru,
+    // glitch-urile CST328 redeclansa actiunea cat degetul era inca pe ecran.
     if (isTouched) {
+        _releaseStartMs = 0;
+        if (_touchDown) {
+            return NavRequest::NONE;   // tinere apasata - nu se re-armeaza
+        }
+        _touchDown = true;
+
         _btnHeld = -1;
         for (uint8_t i = 0; i < DASH_BTN_COUNT; i++) {
             if (hitTest(_view.buttonRect(i), touchX, touchY)) {
@@ -60,7 +74,21 @@ DashboardScreen::NavRequest DashboardScreen::update(int touchX, int touchY,
         return NavRequest::NONE;
     }
 
-    // Eliberare: confirmare doar daca degetul a ramas in acelasi buton.
+    // Fara atingere: asteptam confirmarea eliberarii.
+    if (!_touchDown) {
+        return NavRequest::NONE;
+    }
+    if (_releaseStartMs == 0) {
+        _releaseStartMs = millis();
+        return NavRequest::NONE;
+    }
+    if ((uint32_t)(millis() - _releaseStartMs) < TOUCH_RELEASE_CONFIRM_MS) {
+        return NavRequest::NONE;
+    }
+    _touchDown = false;
+    _releaseStartMs = 0;
+
+    // Eliberare confirmata: doar daca degetul a ramas in acelasi buton.
     if (_btnHeld < 0) {
         return NavRequest::NONE;
     }
