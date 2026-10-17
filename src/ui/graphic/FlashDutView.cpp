@@ -116,6 +116,9 @@ void FlashDutView::drawDutStatus(const FlashDutViewModel& m)
     if (!m.hostAvailable) {
         _gfx->setTextColor(UiTheme::COLOR_RED);
         _gfx->print("USB HOST: nedisponibil pe acest target");
+    } else if (m.dutConnected && m.legacyDut) {
+        _gfx->setTextColor(UiTheme::COLOR_YELLOW);
+        _gfx->print("DUT: firmware vechi (fara service mode)");
     } else if (m.dutConnected) {
         _gfx->setTextColor(UiTheme::COLOR_GREEN);
         _gfx->print("DUT: ");

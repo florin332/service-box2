@@ -77,6 +77,7 @@ void FlashDutScreen::init()
     const DutPanelInfo& panel = dut_panel_info();
     bool blankMsc = !panel.valid && !dut_cdc_connected() &&
                     (dut_msc_dev_addr() != 0);
+    bool legacyDut = !panel.valid && !blankMsc && dut_cdc_connected();
 
     if (blankMsc) {
         // Flux "blank DUT": panou nou, enumerat direct ca volum MSC
@@ -86,6 +87,15 @@ void FlashDutScreen::init()
                                                      FLASH_MAX_FILES);
         strncpy(_model.dutIdentity, "blank (bootloader)",
                 sizeof(_model.dutIdentity) - 1);
+    } else if (legacyDut) {
+        // Flux "legacy": firmware vechi fara service mode - CDC-ul
+        // raspunde, dar mb_01 nu intoarce identitate. Fara Panel ID nu se
+        // poate filtra: listam TOATE .uf2-urile. SRV BOOTSEL nu va fi
+        // recunoscut, deci intrarea in bootloader se face cu butonul fizic
+        // (WAIT_MSC din dut_flash acopera acest caz, timeout 20 s).
+        _model.fileCount = (uint8_t)fw_repo_list_all(_model.fileNames,
+                                                     FLASH_MAX_FILES);
+        strncpy(_model.dutIdentity, "legacy", sizeof(_model.dutIdentity) - 1);
     } else if (panel.valid) {
         _model.fileCount = (uint8_t)fw_repo_list_compatible(
             panel.panelId, _model.fileNames, FLASH_MAX_FILES);
@@ -94,7 +104,8 @@ void FlashDutScreen::init()
     } else {
         _model.fileCount = 0;
     }
-    _model.blankMsc = blankMsc;
+    _model.blankMsc  = blankMsc;
+    _model.legacyDut = legacyDut;
 
     _model.hostAvailable = dut_host_available();
     _model.dutConnected  = dut_cdc_connected();
@@ -124,6 +135,13 @@ void FlashDutScreen::init()
             setStatus("Niciun .uf2 pe SD", UiTheme::COLOR_YELLOW);
         } else {
             setStatus("DUT blank: alege firmware (nefiltrat)",
+                      UiTheme::COLOR_YELLOW);
+        }
+    } else if (legacyDut) {
+        if (0 == _model.fileCount) {
+            setStatus("Niciun .uf2 pe SD", UiTheme::COLOR_YELLOW);
+        } else {
+            setStatus("Firmware vechi: alege, apoi apasa BOOTSEL fizic",
                       UiTheme::COLOR_YELLOW);
         }
     } else if (!panel.valid) {
