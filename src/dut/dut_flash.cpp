@@ -24,7 +24,7 @@ static constexpr uint32_t UF2_FAMILY_RP2040 = 0xE48BFF56UL;
 static constexpr uint16_t CHUNK_BYTES        = 4096;      // 8 sectoare/pas
 static constexpr uint32_t WAIT_MSC_MS        = 20000UL;   // timp de intrare
                                                           // in bootloader
-// Daca ACK-ul la SRV BOOTSEL a fost primit dar linkul CDC nu cade in acest
+// Daca ACK-ul la mb_02 a fost primit dar linkul CDC nu cade in acest
 // interval, hostul PIO a ratat detach-ul electric al resetului rapid al
 // DUT-ului -> se forteaza o re-enumerare software a portului.
 static constexpr uint32_t REENUM_MS          = 2500UL;
@@ -38,11 +38,11 @@ static DutFlashStatus s_status;
 static uint8_t  s_chunk[CHUNK_BYTES];
 static uint32_t s_phaseDeadline;
 static uint32_t s_nextLba;
-static bool     s_bootselAcked;   // DUT a confirmat SRV BOOTSEL
+static bool     s_bootselAcked;   // DUT a confirmat mb_02
 static bool     s_cdcDropped;     // linkul CDC a cazut => DUT s-a resetat
 static bool     s_reenumForced;   // s-a fortat o re-enumerare a portului
 static bool     s_directMsc;      // mod "blank DUT": scriere directa pe MSC,
-                                  // fara CDC/identitate/SRV BOOTSEL
+                                  // fara CDC/identitate/mb_02
 static DutLink  s_lastLink;       // ultima stare de link logata in WAIT_MSC
 
 static void setPhase(DutFlashPhase p)

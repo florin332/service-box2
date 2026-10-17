@@ -6,7 +6,7 @@
 //   - DMA channel 9 - ferit de claim-urile timpurii ale SDIO-ului
 //   - GP0 (D+) / GP1 (D-), fara VBUS in cablu (DUT alimentat separat)
 //
-// THREAD-SAFETY (cauza blocajului la SRV BOOTSEL): TinyUSB host NU este
+// THREAD-SAFETY (cauza blocajului la mb_02): TinyUSB host NU este
 // sigur cross-core. Adafruit_USBH_CDC::write() apeleaza tuh_task() intern
 // daca FIFO-ul de TX e plin; apelata din core0 in timp ce core1 ruleaza
 // USBHost.task(), structurile de endpoint ale PIO host erau modificate

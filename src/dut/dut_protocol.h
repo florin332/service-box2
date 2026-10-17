@@ -15,7 +15,7 @@
 //   - raspunsuri: "OK ..." / "ACK ..." / "ERR <cod> <motiv>"
 //   - SRV ENTER intoarce identificatorul "D_<hardware>_<major>.<minor>"
 //     (ex. "D_01_10.28") - folosit ca handshake + versiune firmware
-//   - SRV BOOTSEL (adaugata in firmware-ul DUT) comuta in bootloader;
+//   - mb_02 (adaugata in firmware-ul DUT) comuta in bootloader;
 //     ACK-ul poate sa nu apuca sa iasa - detach-ul CDC e confirmarea
 //
 // Ruleaza pe core0, peste transportul din dut_host.
@@ -26,7 +26,7 @@
 // Returneaza false la lipsa legaturii, timeout sau raspuns neasteptat.
 bool dut_query_identity(char* identity, size_t len, uint32_t timeoutMs = 2500);
 
-// Trimite SRV BOOTSEL. DUT-ul poate disparea de pe USB inainte de ACK,
+// Trimite mb_02. DUT-ul poate disparea de pe USB inainte de ACK,
 // deci rezultatul e informativ: true = ACK/OK primit, false = timeout/
 // deconectare (frecvent la succes - verificarea reala e aparitia volumului
 // MSC, urmarita de flasher). Timeout-ul default este scurt, ca asteptarea

@@ -80,6 +80,9 @@ bool dut_query_identity(char* identity, size_t len, uint32_t timeoutMs)
     // Nota: versiunea exacta nu este expusa de o comanda de interogare -
     // in service mode afisam placeholder "in service".
     if (s_serviceActive) {
+        // Interogare de stare: nu exista inca o comanda mb_NN definita pentru
+        // comunicatie (grup planificat). Folosim forma legacy "mb_status",
+        // inofensiva: panourile fara parser extins raspund ERR 01.
         if (!dut_cdc_write_line("mb_status")) {
             Serial.println("DUT: nu s-a putut posta mb_status");
             return false;
@@ -123,21 +126,21 @@ bool dut_request_bootsel(uint32_t timeoutMs)
 
     flushInput();
 
-    // Comanda anterioara (ex. mb_status din faza IDENTIFY a flasher-ului)
+    // Comanda anterioara (ex. mb_05 din faza IDENTIFY a flasher-ului)
     // poate detine inca slotul TX pe core1: s_txPending se sterge abia la
     // golirea FIFO-ului sau la timeout-ul TX de 1s. Postarea imediata ar
     // esua fals ("nu s-a putut posta"). Reincercam pana acoperim timeout-ul.
     bool posted = false;
     uint32_t postDeadline = millis() + 2500;
     do {
-        posted = dut_cdc_write_line("SRV BOOTSEL");
+        posted = dut_cdc_write_line("mb_02");
         if (!posted)
             delay(100);
     } while (!posted && dut_cdc_connected() &&
              (int32_t)(postDeadline - millis()) > 0);
 
     if (!posted) {
-        Serial.println("DUT: nu s-a putut posta SRV BOOTSEL");
+        Serial.println("DUT: nu s-a putut posta mb_02");
         return false;
     }
 
@@ -149,12 +152,14 @@ bool dut_request_bootsel(uint32_t timeoutMs)
         int n = dut_cdc_read_line(resp, sizeof(resp),
                                   (uint32_t)(deadline - millis()));
         if (n <= 0) {
-            Serial.printf("DUT: SRV BOOTSEL fara raspuns (%d)\n", n);
+            Serial.printf("DUT: mb_02 fara raspuns (%d)\n", n);
             return false;
         }
         if (strncmp(resp, "DBG", 3) == 0)
             continue;   // marker de etapa de pe DUT - nu este raspunsul
-        Serial.printf("DUT: raspuns la SRV BOOTSEL: '%s'\n", resp);
+        Serial.printf("DUT: raspuns la mb_02: '%s'\n", resp);
+        // Conform protocolului: confirmarea este "ACK_02"; acceptam si OK
+        // pentru robustete la variante de firmware in tranzitie.
         return (strncmp(resp, "ACK", 3) == 0) || (strncmp(resp, "OK", 2) == 0);
     }
     return false;
@@ -221,7 +226,7 @@ bool dut_exit_service(uint32_t timeoutMs)
     if (n <= 0)
         return false;
 
-    // Raspunsul documentat este "ACK SRV EXIT".
+    // Raspunsul documentat este "ACK_00".
     bool ok = (strncmp(resp, "ACK", 3) == 0);
     if (!ok) {
         Serial.printf("DUT: raspuns neasteptat la mb_00: '%s'\n", resp);

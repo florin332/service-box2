@@ -63,7 +63,7 @@ uint8_t dut_msc_dev_addr();   // 0 daca nu exista volum MSC montat
 bool dut_msc_write_blocks(uint32_t lba, const uint8_t* buf, uint16_t blockCount);
 
 // Fortare re-enumerare a portului host (core0 cere, core1 executa).
-// Folosita dupa SRV BOOTSEL cand DUT-ul s-a resetat, dar detach-ul electric
+// Folosita dupa mb_02 cand DUT-ul s-a resetat, dar detach-ul electric
 // nu a fost detectat (fereastra SE0 prea scurta la reset rapid): publica un
 // DISCONNECT software catre TinyUSB, apoi elibereaza portul pentru re-attach.
 void dut_host_force_reenumerate();

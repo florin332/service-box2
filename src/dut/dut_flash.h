@@ -9,7 +9,7 @@
 // Flux (masina de stari, pasata din loop() pe core0):
 //   IDENTIFY        -> retine identitatea curenta (informativa; handshake-ul
 //                      real al sesiunii se face la intrarea in START)
-//   ENTER_BOOTSEL   -> SRV BOOTSEL (comanda din firmware-ul DUT); daca DUT-ul
+//   ENTER_BOOTSEL   -> mb_02 (comanda din firmware-ul DUT); daca DUT-ul
 //                      nu o recunoaste (firmware vechi), se asteapta oricum
 //                      MSC - utilizatorul poate apasa BOOTSEL fizic
 //   WAIT_MSC        -> asteapta volumul "RPI-RP2" (timeout -> FAILED)
