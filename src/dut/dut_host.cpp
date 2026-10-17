@@ -94,6 +94,7 @@ static uint32_t      s_reenumAt    = 0;
 
 void dut_host_force_reenumerate()   // sigur de pe core0
 {
+    Serial.println("USB HOST: re-enumerare ceruta");
     s_reenumReq = true;
 }
 
@@ -107,6 +108,12 @@ static void pumpReenum()
             s_reenumPhase = 1;
             s_reenumAt    = millis() + 50;
             Serial.println("USB HOST: detach fortat (re-enumerare)");
+        } else {
+            // Cerere respinsa: starea root port nu mai reflecta link-ul CDC
+            // (desincronizare dupa re-enumerari repetate). Log explicit -
+            // fara ea, recuperarea murea silentios (pasii 2+ din sonda).
+            Serial.printf("USB HOST: re-enumerare RESPINSA (init=%d conn=%d)\n",
+                          (int)root->initialized, (int)root->connected);
         }
         return;
     }
@@ -201,19 +208,87 @@ static void pumpCdcRx()
     }
 }
 
-// Trimite comanda postata de core0 (o data, la pending).
+// ---- TX non-blocant (core1) ------------------------------------------------
+// Adafruit_USBH_CDC::write() BUCLEAZA LA NESFARSIT cand DUT-ul NAK-uie
+// endpoint-ul OUT (FIFO plin -> write() pompeaza tuh_task() intern pana se
+// goleste). Un DUT blocat (observat dupa SRV EXIT) ingheata astfel core1 si
+// omoara intregul stack host pana la reset - nici macar re-enumerarea ceruta
+// de core0 nu se mai executa. De aceea scrierea se face direct cu
+// tuh_cdc_write()/tuh_cdc_write_flush() (ambele non-blocante: copiaza in
+// FIFO / pornesc transferul), iar golirea FIFO-ului este monitorizata cu
+// deadline; la expirare FIFO-ul se curata, comanda se arunca si se cere
+// re-enumerarea portului (link-ul este considerat mort).
+static volatile uint8_t s_cdcIdx = 0xFF;   // interfata CDC montata (0xFF = niciuna)
+
+static size_t   s_txLen       = 0;   // >0 = comanda in FIFO, asteapta golirea
+static uint32_t s_txThreshold = 0;   // write_available imediat dupa copiere
+static uint32_t s_txDeadline  = 0;
+// Fereastra de completare a TX-ului. 300ms producea fals-pozitive: comanda
+// ajungea si primea ACK (transfer completat pe fir), dar eliberarea FIFO-ului
+// nu era vizibila in tuh_cdc_write_available in fereastra -> re-enumerare
+// spurie chiar dupa un mb_00 reusit, posibila sursa a desincronizarii
+// observate de la pasul 2 al sondei. 1s este inca mult sub timeout-ul de
+// raspuns al protocolului (2.5s).
+static constexpr uint32_t TX_TIMEOUT_MS = 1000;
+
+// Trimite comanda postata de core0 (o data, la pending), apoi monitorizeaza
+// golirea FIFO-ului de TX la iteratiile urmatoare ale loop1().
 static void pumpCdcTx()
 {
-    if (!s_txPending)
+    if (s_txPending && s_txLen == 0) {
+        char buf[70];
+        size_t n = strlen(s_txLine);
+        memcpy(buf, s_txLine, n);
+        buf[n++] = '\r';
+        buf[n++] = '\n';
+
+        if (s_link == DutLink::CDC && s_cdcIdx != 0xFF &&
+            tuh_cdc_write(s_cdcIdx, buf, (uint32_t)n) == n) {
+            tuh_cdc_write_flush(s_cdcIdx);
+            s_txLen       = n;
+            s_txThreshold = tuh_cdc_write_available(s_cdcIdx);
+            s_txDeadline  = millis() + TX_TIMEOUT_MS;
+            // s_txPending se sterge cand FIFO-ul s-a golit (sau la timeout).
+        } else {
+            // Link cazut sau FIFO-ul nu poate inghiti o comanda intreaga
+            // (liniile sunt < 64 B, FIFO-ul e mult mai mare) = link mort.
+            Serial.printf("USB HOST: TX post esuat (link=%d idx=%u)\n",
+                          (int)s_link, (unsigned)s_cdcIdx);
+            __sync_synchronize();
+            s_txPending = false;
+        }
+        return;
+    }
+
+    if (s_txLen == 0)
         return;
 
-    if (s_link == DutLink::CDC && SerialHost.connected()) {
-        SerialHost.write((const uint8_t*)s_txLine, strlen(s_txLine));
-        SerialHost.write("\r\n");
-        SerialHost.flush();
+    if (s_link != DutLink::CDC || s_cdcIdx == 0xFF) {
+        s_txLen = 0;   // link-ul a cazut intre postare si completare
+        __sync_synchronize();
+        s_txPending = false;
+        return;
     }
-    __sync_synchronize();
-    s_txPending = false;
+
+    if (tuh_cdc_write_available(s_cdcIdx) > s_txThreshold) {
+        s_txLen = 0;   // FIFO golit: comanda a plecat pe fir
+        __sync_synchronize();
+        s_txPending = false;
+        return;
+    }
+
+    if ((int32_t)(millis() - s_txDeadline) > 0) {
+        // Doar aruncam comanda, FARA re-enumerare automata: detectia prin
+        // write_available producea fals-pozitive chiar dupa un ACK reusit
+        // (comanda ajunsese la DUT), iar re-enumerarile spurii repetate
+        // pareau sa corupa starea host-ului (pasul aleator de moarte al
+        // sondei). Protocolul reincearca oricum (retry in ServiceActions).
+        Serial.println("USB HOST: TX blocat (DUT nu consuma OUT) - comanda aruncata");
+        tuh_cdc_write_clear(s_cdcIdx);
+        s_txLen = 0;
+        __sync_synchronize();
+        s_txPending = false;
+    }
 }
 
 // Executa cererea MSC postata de core0 (blocant pe core1 pana la completare).
@@ -398,6 +473,7 @@ void tuh_umount_cb(uint8_t daddr)
 void tuh_cdc_mount_cb(uint8_t idx)
 {
     SerialHost.mount(idx);
+    s_cdcIdx = idx;
     __sync_synchronize();
     s_link = DutLink::CDC;
     Serial.println("USB HOST: DUT conectat (CDC)");
@@ -406,6 +482,8 @@ void tuh_cdc_mount_cb(uint8_t idx)
 void tuh_cdc_umount_cb(uint8_t idx)
 {
     SerialHost.umount(idx);
+    s_cdcIdx = 0xFF;
+    s_txLen  = 0;   // abandoneaza o comanda in curs, daca exista
     dut_protocol_on_disconnect();
     __sync_synchronize();
     s_link = DutLink::NONE;
