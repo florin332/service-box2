@@ -80,8 +80,10 @@ bool dut_query_identity(char* identity, size_t len, uint32_t timeoutMs)
     // Nota: versiunea exacta nu este expusa de o comanda de interogare -
     // in service mode afisam placeholder "in service".
     if (s_serviceActive) {
-        if (!dut_cdc_write_line("mb_status"))
+        if (!dut_cdc_write_line("mb_status")) {
+            Serial.println("DUT: nu s-a putut posta mb_status");
             return false;
+        }
         char resp[64];
         int n = dut_cdc_read_line(resp, sizeof(resp), timeoutMs);
         if (n > 0 && strncmp(resp, "OK", 2) == 0) {
@@ -89,6 +91,7 @@ bool dut_query_identity(char* identity, size_t len, uint32_t timeoutMs)
             identity[len - 1] = '\0';
             return true;
         }
+        Serial.printf("DUT: mb_status fara raspuns valid (%d)\n", n);
         return false;
     }
 
@@ -120,14 +123,24 @@ bool dut_request_bootsel(uint32_t timeoutMs)
 
     flushInput();
 
-    if (!dut_cdc_write_line("SRV BOOTSEL"))
+    if (!dut_cdc_write_line("SRV BOOTSEL")) {
+        Serial.println("DUT: nu s-a putut posta SRV BOOTSEL");
         return false;
+    }
 
-    char resp[64];
-    int n = dut_cdc_read_line(resp, sizeof(resp), timeoutMs);
-    // n == 0 (timeout) sau n == -1 (DUT a intrat deja in bootloader) sunt
-    // ambele acceptabile; ACK/OK primit = confirmare explicita.
-    if (n > 0) {
+    // DUT-ul poate trimite markeri de diagnostica ("DBG ...") inainte de ACK;
+    // citim linii pana la ACK/OK sau timeout, altfel markerii falsau ACK-ul.
+    uint32_t deadline = millis() + timeoutMs;
+    while ((int32_t)(deadline - millis()) > 0) {
+        char resp[64];
+        int n = dut_cdc_read_line(resp, sizeof(resp),
+                                  (uint32_t)(deadline - millis()));
+        if (n <= 0) {
+            Serial.printf("DUT: SRV BOOTSEL fara raspuns (%d)\n", n);
+            return false;
+        }
+        if (strncmp(resp, "DBG", 3) == 0)
+            continue;   // marker de etapa de pe DUT - nu este raspunsul
         Serial.printf("DUT: raspuns la SRV BOOTSEL: '%s'\n", resp);
         return (strncmp(resp, "ACK", 3) == 0) || (strncmp(resp, "OK", 2) == 0);
     }
@@ -141,6 +154,18 @@ bool dut_enter_service(char* identity, size_t len, uint32_t timeoutMs)
 
     if (!dut_cdc_connected())
         return false;
+
+    // Idempotenta: daca Service Mode este deja activ pe acest link, mb_01
+    // s-ar re-executa pe DUT (re-trimiterea frame-ului de service pe
+    // ecrane). Handshake-ul s-a facut la intrarea in START; revenirile
+    // ulterioare pe START pastreaza starea existenta.
+    if (s_serviceActive && s_panelInfo.valid) {
+        if (NULL != identity && len > 0) {
+            strncpy(identity, s_panelInfo.identity, len - 1);
+            identity[len - 1] = '\0';
+        }
+        return true;
+    }
 
     flushInput();
 

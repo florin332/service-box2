@@ -29,8 +29,9 @@ bool dut_query_identity(char* identity, size_t len, uint32_t timeoutMs = 2500);
 // Trimite SRV BOOTSEL. DUT-ul poate disparea de pe USB inainte de ACK,
 // deci rezultatul e informativ: true = ACK/OK primit, false = timeout/
 // deconectare (frecvent la succes - verificarea reala e aparitia volumului
-// MSC, urmarita de flasher).
-bool dut_request_bootsel(uint32_t timeoutMs = 800);
+// MSC, urmarita de flasher). Timeout-ul default este scurt, ca asteptarea
+// blocanta sa nu acopere fereastra detach/reattach observata de ISR-ul PIO.
+bool dut_request_bootsel(uint32_t timeoutMs = 150);
 
 // ---- Comenzi de sesiune (legatura dintre UI si starea de service a DUT) ----
 

@@ -24,6 +24,10 @@ static constexpr uint32_t UF2_FAMILY_RP2040 = 0xE48BFF56UL;
 static constexpr uint16_t CHUNK_BYTES        = 4096;      // 8 sectoare/pas
 static constexpr uint32_t WAIT_MSC_MS        = 20000UL;   // timp de intrare
                                                           // in bootloader
+// Daca ACK-ul la SRV BOOTSEL a fost primit dar linkul CDC nu cade in acest
+// interval, hostul PIO a ratat detach-ul electric al resetului rapid al
+// DUT-ului -> se forteaza o re-enumerare software a portului.
+static constexpr uint32_t REENUM_MS          = 2500UL;
 // LBA de start pe volumul virtual RPI-RP2 (oricare - bootrom-ul ignora LBA
 // pentru blocurile cu magic UF2; incepem dupa zona de metadate a FAT-ului).
 static constexpr uint32_t WRITE_START_LBA    = 256;
@@ -34,6 +38,10 @@ static DutFlashStatus s_status;
 static uint8_t  s_chunk[CHUNK_BYTES];
 static uint32_t s_phaseDeadline;
 static uint32_t s_nextLba;
+static bool     s_bootselAcked;   // DUT a confirmat SRV BOOTSEL
+static bool     s_cdcDropped;     // linkul CDC a cazut => DUT s-a resetat
+static bool     s_reenumForced;   // s-a fortat o re-enumerare a portului
+static DutLink  s_lastLink;       // ultima stare de link logata in WAIT_MSC
 
 static void setPhase(DutFlashPhase p)
 {
@@ -164,10 +172,14 @@ void dut_flash_update()
     }
 
     case DutFlashPhase::ENTER_BOOTSEL: {
-        // ACK-ul poate sa nu apuca sa iasa; rezultatul e informativ.
+        // ACK-ul poate sa nu apuca sa iasa; rezultatul este retinut pentru
+        // diagnosticarea din WAIT_MSC (hang dupa ACK vs. fara ACK).
         // Daca DUT-ul are firmware vechi (fara comanda), utilizatorul poate
         // apasa BOOTSEL fizic - WAIT_MSC acopera ambele cazuri.
-        dut_request_bootsel();
+        s_bootselAcked = dut_request_bootsel();
+        s_cdcDropped   = false;
+        s_reenumForced = false;
+        s_lastLink     = dut_link_state();
         s_phaseDeadline = millis() + WAIT_MSC_MS;
         setPhase(DutFlashPhase::WAIT_MSC);
         break;
@@ -181,8 +193,44 @@ void dut_flash_update()
             Serial.println("DUT FLASH: bootloader detectat, scriere...");
             break;
         }
+
+        // Urmarirea linkului: caderea CDC-ului dovedeste ca DUT-ul s-a
+        // resetat; persistenta lui dupa ACK dovedeste blocaj pe DUT.
+        // Tranzitiile sunt logate - daca DUT-ul se reseteaza dar hostul
+        // PIO-USB nu vede detach-ul, aici se va vedea (lipsa NONE/MSC).
+        DutLink link = dut_link_state();
+        if (link != s_lastLink) {
+            Serial.printf("DUT FLASH: link %d -> %d\n",
+                          (int)s_lastLink, (int)link);
+            s_lastLink = link;
+        }
+        if (link == DutLink::NONE) {
+            s_cdcDropped = true;
+        }
+
+        // Dupa ACK, DUT-ul se reseteaza imediat. Daca detach-ul electric nu
+        // se vede (reset prea rapid pentru connection_check), fortam o
+        // re-enumerare software a portului host - o singura data.
+        if (s_bootselAcked && !s_cdcDropped && !s_reenumForced &&
+            (int32_t)(millis() - (s_phaseDeadline - (WAIT_MSC_MS - REENUM_MS))) > 0) {
+            s_reenumForced = true;
+            Serial.println("DUT FLASH: detach nevazut dupa ACK - "
+                           "fortez re-enumerarea hostului");
+            dut_host_force_reenumerate();
+        }
+
+        // Dupa re-enumerarea fortata portul a revenit ca CDC (nu MSC):
+        // DUT-ul este inca in aplicatie - resetul nu s-a produs.
+        if (s_reenumForced && s_cdcDropped && link == DutLink::CDC) {
+            fail("DUT nu s-a resetat dupa ACK - power-cycle panou");
+            break;
+        }
         if ((int32_t)(millis() - s_phaseDeadline) > 0) {
-            fail("DUT nu a intrat in bootloader (apasa BOOTSEL fizic)");
+            if (s_cdcDropped) {
+                fail("DUT resetat, dar volumul MSC nu a aparut");
+            } else {
+                fail("DUT nu a intrat in bootloader (apasa BOOTSEL fizic)");
+            }
         }
         break;
     }

@@ -20,7 +20,23 @@ ServiceActions::ServiceActions(IBatteryProvider& battery)
 ActionOutcome ServiceActions::execute(UiEvent ev)
 {
     switch (ev) {
-        case UiEvent::START_CONFIRMED:   return handleStartConfirmed();
+        case UiEvent::START_CONFIRMED: {
+            // Handshake la apasarea START (nu la intrarea in pagina):
+            // "mb_01" pune DUT-ul in Service Mode si intoarce identitatea.
+            // Blocant max ~2.5s, doar daca DUT-ul raspunde. Fara DUT
+            // conectat comanda se sare - navigarea nu este blocata.
+            if (dut_cdc_connected()) {
+                char identity[24];
+                if (dut_enter_service(identity, sizeof(identity))) {
+                    Serial.printf("[Actions] START handshake: %s\n", identity);
+                } else {
+                    Serial.println("[Actions] START: handshake esuat");
+                }
+            }
+            _testActive = true;
+            Serial.println("[Actions] START_CONFIRMED -> dashboard");
+            return { ActionResult::OK, "test started (placeholder)" };
+        }
         case UiEvent::FORCED_LOW_POWER:  return handleForcedLowPower();
         case UiEvent::BACK_TO_START:     return handleBackToStart();
         case UiEvent::SD_CHECK_REQUESTED:
@@ -41,27 +57,6 @@ void ServiceActions::update()
     // Pump periodic pentru actiuni cu durata (pipeline teste).
     // Deocamdata: daca testul e activ si bateria a devenit CRITICAL,
     // oprirea se face prin FORCED_LOW_POWER (venit din navigator).
-}
-
-ActionOutcome ServiceActions::handleStartConfirmed()
-{
-    // Handshake la apasarea butonului START (prompt1.md: detect ->
-    // handshake -> identificare): "mb_01" (SRV ENTER) pune DUT-ul in
-    // Service Mode si intoarce identitatea "D_...". Blocant max ~2.5s,
-    // doar daca DUT-ul raspunde. Rezultatul (PanelInfo) este pastrat in
-    // dut_protocol si citit de pagina Flash pentru filtrarea firmware-urilor.
-    if (dut_cdc_connected()) {
-        char identity[24];
-        if (dut_enter_service(identity, sizeof(identity))) {
-            Serial.printf("[Actions] START handshake: %s\n", identity);
-        } else {
-            Serial.println("[Actions] START: handshake esuat");
-        }
-    }
-    // TODO(pas viitor): pornire secventa teste panouri ascensoare.
-    _testActive = true;
-    Serial.println("[Actions] START_CONFIRMED -> secventa teste (placeholder)");
-    return { ActionResult::OK, "test started (placeholder)" };
 }
 
 ActionOutcome ServiceActions::handleForcedLowPower()
