@@ -123,7 +123,20 @@ bool dut_request_bootsel(uint32_t timeoutMs)
 
     flushInput();
 
-    if (!dut_cdc_write_line("SRV BOOTSEL")) {
+    // Comanda anterioara (ex. mb_status din faza IDENTIFY a flasher-ului)
+    // poate detine inca slotul TX pe core1: s_txPending se sterge abia la
+    // golirea FIFO-ului sau la timeout-ul TX de 1s. Postarea imediata ar
+    // esua fals ("nu s-a putut posta"). Reincercam pana acoperim timeout-ul.
+    bool posted = false;
+    uint32_t postDeadline = millis() + 2500;
+    do {
+        posted = dut_cdc_write_line("SRV BOOTSEL");
+        if (!posted)
+            delay(100);
+    } while (!posted && dut_cdc_connected() &&
+             (int32_t)(postDeadline - millis()) > 0);
+
+    if (!posted) {
         Serial.println("DUT: nu s-a putut posta SRV BOOTSEL");
         return false;
     }

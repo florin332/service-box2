@@ -177,6 +177,10 @@ void dut_host_core1_setup()
 // ---------------------------------------------------------------------------
 
 // Asambleaza octetii primiti pe CDC in linii, in bufferul partajat.
+// s_rxByteCount: contor monoton al octetilor RX - folosit de pumpCdcTx ca
+// dovada ca DUT-ul consuma OUT (un raspuns implica citirea comenzii).
+static volatile uint32_t s_rxByteCount = 0;
+
 static void pumpCdcRx()
 {
     if (s_link != DutLink::CDC || !SerialHost.connected())
@@ -186,6 +190,7 @@ static void pumpCdcRx()
     // DUT-ul raspunde cu o singura linie per comanda, nu curgem risc.
     while (SerialHost.available()) {
         char c = (char)SerialHost.read();
+        s_rxByteCount++;
 
         if (c == '\n' || c == '\r') {
             if (s_rxAsmLen > 0) {
@@ -223,6 +228,7 @@ static volatile uint8_t s_cdcIdx = 0xFF;   // interfata CDC montata (0xFF = nici
 static size_t   s_txLen       = 0;   // >0 = comanda in FIFO, asteapta golirea
 static uint32_t s_txThreshold = 0;   // write_available imediat dupa copiere
 static uint32_t s_txDeadline  = 0;
+static uint32_t s_txRxSnapshot = 0;  // s_rxByteCount la postarea TX
 // Fereastra de completare a TX-ului. 300ms producea fals-pozitive: comanda
 // ajungea si primea ACK (transfer completat pe fir), dar eliberarea FIFO-ului
 // nu era vizibila in tuh_cdc_write_available in fereastra -> re-enumerare
@@ -248,6 +254,7 @@ static void pumpCdcTx()
             s_txLen       = n;
             s_txThreshold = tuh_cdc_write_available(s_cdcIdx);
             s_txDeadline  = millis() + TX_TIMEOUT_MS;
+            s_txRxSnapshot = s_rxByteCount;
             // s_txPending se sterge cand FIFO-ul s-a golit (sau la timeout).
         } else {
             // Link cazut sau FIFO-ul nu poate inghiti o comanda intreaga
@@ -272,6 +279,18 @@ static void pumpCdcTx()
 
     if (tuh_cdc_write_available(s_cdcIdx) > s_txThreshold) {
         s_txLen = 0;   // FIFO golit: comanda a plecat pe fir
+        __sync_synchronize();
+        s_txPending = false;
+        return;
+    }
+
+    // Scurt-circuit: ORICE octet RX primit dupa postare dovedeste ca DUT-ul
+    // a consumat comanda de pe OUT (altfel nu ar avea la ce raspunde).
+    // Eliberarea FIFO-ului in write_available ramane uneori invizibila
+    // (panoul e ocupat cu frame-ul de service) si producea "TX blocat"
+    // fals-pozitiv chiar dupa comenzi cu ACK/raspuns primit.
+    if (s_rxByteCount != s_txRxSnapshot) {
+        s_txLen = 0;   // comanda consumata, dovedit de raspunsul DUT
         __sync_synchronize();
         s_txPending = false;
         return;
